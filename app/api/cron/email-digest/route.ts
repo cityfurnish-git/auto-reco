@@ -23,6 +23,9 @@ import { digestTargetDate } from "@/lib/reconcile/cron-dates";
 import { saveEmailArchive, saveEmailPdf, pruneEmailArchive } from "@/lib/email/email-archive";
 import { buildRegisterPdfs, registerAttachments } from "@/lib/email/register-pdf";
 import { drainScheduledEmails } from "@/lib/email/scheduled";
+import { runReconcilePipeline } from "@/lib/reconcile/pipeline";
+import { recheckTargetDate } from "@/lib/reconcile/cron-dates";
+import { noteRecheckSkipped } from "@/lib/db/persist";
 import { enqueueFollowUp, shouldEnqueueFollowUp } from "@/lib/email/followup/queue";
 import { saveEmailLog } from "@/lib/db/persist";
 
@@ -30,7 +33,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** What the re-check needs of this function's 60 seconds; see its block below. */
+const RECHECK_BUDGET_MS = 25_000;
+
 async function handle(req: NextRequest) {
+  const startedAt = Date.now();
   if (!cronAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -163,6 +170,54 @@ async function handle(req: NextRequest) {
   // ageing section and the Stock Analyser both depend on them.
   void enqueue;
 
+  // ── THE RE-CHECK PASS LIVES HERE NOW (25→28 Sep 2026) ────────────────
+  //
+  // It used to ride the reconcile cron, guarded by a 40s budget inside a 60s
+  // function. On 25 Sep the primary pass took 48s and the re-check was skipped
+  // — which is exactly the pass that re-judges a day whose books arrive late,
+  // including the week-off case (Friday re-running Wednesday). A guard that
+  // skips the work whenever the day is busy is no guard at all.
+  //
+  // This job is a SEPARATE invocation with its own 60 seconds, and by now its
+  // own work — the digest — has already been sent, so the worst case is the
+  // platform killing us after the email went out. Running it before the
+  // follow-up drain also makes an ordering that used to be a hope (two crons,
+  // 60 minutes apart, no guarantee) into a sequence in one process.
+  //
+  // WHY TWO DAYS BACK, not one: the follow-up email for date D reports how
+  // much of D was closed and must send AFTER D has been re-run. D's digest
+  // goes out on D+1 and its follow-up on D+3, so the re-check has to land on
+  // D+3 too. (After a week-off the target moves to the day before instead —
+  // see recheckTargetDate.) A THIRD pass does not fit anywhere: a pass is p50
+  // 36s against a 60s ceiling.
+  //
+  // OCR is skipped: a register still pending days later has failed repeatedly,
+  // and 10 uploads x 55s of Azure polling inside a 60s function is a tail risk
+  // with no upside. Skipping is fail-safe — the guard source is then simply
+  // absent, fullCoverage is false, and the resolved-late branch does not fire.
+  //
+  // Only on the untouched scheduled run: a human asking for one date's email
+  // must not silently reconcile another date.
+  let recheck: unknown;
+  if (!dateParam) {
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > RECHECK_BUDGET_MS) {
+      recheck = { ok: false, skipped: "budget", elapsedMs: elapsed };
+      if (run?.id) {
+        await noteRecheckSkipped(db, run.id as string, `digest budget: ${elapsed}ms of ${RECHECK_BUDGET_MS}ms`).catch(() => {});
+      }
+    } else {
+      // recheckTargetDate(), never local arithmetic: the follow-up below looks
+      // for a re-run of exactly this date, so the two must be one expression.
+      recheck = await runReconcilePipeline(db, {
+        runDate: recheckTargetDate(),
+        trigger: "cron",
+        skipOcr: true,
+        role: "recheck",
+      }).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+    }
+  }
+
   // Now the follow-ups, last, having given the re-check every spare second.
   let followUps: Awaited<ReturnType<typeof drainScheduledEmails>> = [];
   try {
@@ -195,6 +250,7 @@ async function handle(req: NextRequest) {
   // Strip the rendered body from the response — it's archived, not API payload.
   const { html: _html, subject: _subject, ...meta } = result;
   return NextResponse.json({ ok: true, date, ...meta, scheduled,
+    recheck,
     followUps,
     followUpQueued: enqueue.enqueue ? date : enqueue.reason, pruned });
 }

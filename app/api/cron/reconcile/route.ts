@@ -11,8 +11,7 @@ import { jsonRoute } from "@/lib/api/json-route";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DISABLED_BODY, cronAuthorized, scheduledJobsDisabled } from "@/lib/reconcile/cron-guard";
 import { runReconcilePipeline } from "@/lib/reconcile/pipeline";
-import { reconcileTargetDate, recheckTargetDate } from "@/lib/reconcile/cron-dates";
-import { noteRecheckSkipped } from "@/lib/db/persist";
+import { reconcileTargetDate } from "@/lib/reconcile/cron-dates";
 import { addDays } from "@/lib/engine/dates";
 
 export const runtime = "nodejs";
@@ -35,7 +34,6 @@ export const maxDuration = 60; // Hobby ceiling; raise to 300 on Vercel Pro.
 //
 // This guard does not make the second pass fit. It converts an invisible kill
 // into a visible, honest skip.
-const RECHECK_BUDGET_MS = 40_000;
 
 async function handle(req: NextRequest) {
   if (!cronAuthorized(req)) {
@@ -66,10 +64,8 @@ async function handle(req: NextRequest) {
   // Ignored without an explicit ?date=: the primary pass MUST do its OCR, and a
   // stray query param should never be able to quietly disable it.
   const skipOcr = !!explicitDate && req.nextUrl.searchParams.get("skipOcr") !== null;
-  // THE definition of "this is the untouched scheduled pass". Used for the run's
-  // recorded role AND for the re-check gate below, so the two cannot drift — this
-  // predicate was spelled out twice, and the file's own comment records that the
-  // last pair of duplicated date expressions here disagreed by a day.
+  // THE definition of "this is the untouched scheduled pass", which is what the
+  // run's recorded role turns on.
   const scheduled = req.method === "GET" && !explicitDate;
   const db = createAdminClient();
 
@@ -84,53 +80,16 @@ async function handle(req: NextRequest) {
     role: scheduled ? "primary" : "adhoc",
   });
 
-  // Second-pass re-check: on the scheduled run (GET, no explicit ?date=), also
-  // re-reconcile TWO days before the primary target, so entries made even later
-  // — chiefly Odoo postings — fold in and stale open rows resolve (see
-  // resolveStaleOpenVariances). Skipped for explicit ?date= / POST so a targeted
-  // run stays single.
-  //
-  // WHY -2 AND NOT -1. The follow-up email for date D reports how much of D was
-  // closed, and it must send AFTER D has been re-run. D's digest goes out on
-  // D+1; the follow-up goes out on D+3. With this at -1, date D was re-run on
-  // D+2 and nothing touched it on D+3.
-  //
-  // A THIRD pass was the obvious alternative and does not fit: a pass is p50
-  // 36s against a 60s ceiling, and even two are already unreliable. Moving the
-  // one pass costs nothing, and a wider window folds in strictly MORE late
-  // postings than -1 did. What is given up is a day of freshness — a date's
-  // automatic cleanup now lands on D+3 rather than D+2.
-  //
-  // OCR is skipped on this pass: a register still pending three days later has
-  // failed repeatedly, and 10 uploads x 55s of Azure polling inside a 60s
-  // function is a tail risk with no upside. Skipping is fail-safe — the guard
-  // source is then simply absent, fullCoverage is false, and the resolved-late
-  // branch does not fire at all.
-  let recheck: unknown;
-  if (scheduled) {
-    const elapsed = Date.now() - startedAt;
-    if (elapsed > RECHECK_BUDGET_MS) {
-      const reason = `budget: ${elapsed}ms elapsed of ${RECHECK_BUDGET_MS}ms`;
-      recheck = { ok: false, skipped: "budget", elapsedMs: elapsed };
-      // Record it on the primary run (migration 0017). Until now this lived only
-      // in the response body, so "this date has only one run" was
-      // indistinguishable from "the platform killed us" — and the Stock Analyser
-      // has to tell the reader which.
-      await noteRecheckSkipped(db, result.runId, reason).catch(() => {});
-    } else {
-      // recheckTargetDate(), not local arithmetic: the follow-up email looks
-      // for a re-run of exactly this date, so the two must be one expression.
-      // They were briefly two, and disagreed by a day.
-      recheck = await runReconcilePipeline(db, {
-        runDate: recheckTargetDate(),
-        trigger: "cron",
-        skipOcr: true,
-        role: "recheck",
-      }).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
-    }
-  }
-
-  return NextResponse.json({ ...result, recheck }, { status: result.ok ? 200 : 500 });
+  // THE SECOND-PASS RE-CHECK MOVED to the digest cron on 28 Sep 2026, with the
+  // reasoning that governs it — why it re-runs two days back, why a third pass
+  // does not fit, why it skips OCR. It sat here, second in line inside one
+  // 60-second function, and was dropped whenever the primary pass ran long:
+  // on 25 Sep the primary took 48s against its 40s budget, so the day that
+  // most needed re-judging (Wednesday, whose books arrive on Friday after the
+  // Thursday week-off) was exactly the one it skipped. The digest is a separate
+  // invocation with its own minute, and its own work is done by the time it
+  // starts. See app/api/cron/email-digest/route.ts.
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
 
 export const GET = jsonRoute("cron/reconcile", async (req: NextRequest) => {
