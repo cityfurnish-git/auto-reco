@@ -33,6 +33,7 @@ export const FLAG = {
   VENDOR_RECEIPT: "VENDOR RECEIPT",
   NOT_DELIVERED: "NOT DELIVERED",
   GUARD_OFF_SHIFT: "GUARD OFF-SHIFT",
+  ATTEMPT_LATER: "ATTEMPT — COMPLETED LATER",
 } as const;
 export type VarianceFlag = (typeof FLAG)[keyof typeof FLAG];
 
@@ -41,12 +42,14 @@ export const FLAG_HINT: Record<VarianceFlag, string> = {
   "VENDOR RECEIPT": "A vendor / PO receipt. These never go through the Delivery Tracker, so its absence there is expected.",
   "NOT DELIVERED": "The sheet says Not Delivered or the tracker says Not Done — the goods went out and came back.",
   "GUARD OFF-SHIFT": "No guard was signed in at this gate at any time that day, so Guard Check could not record it.",
+  "ATTEMPT — COMPLETED LATER": "The Delivery Tracker recorded an attempt on this day and closed the job on a later date — often a van that went out and came back empty. It is the only book claiming this movement today.",
 };
 
 export interface FlagInput {
   direction: string;
   job_type: string | null;
   present_p?: boolean;
+  present_s?: boolean;
   present_d?: boolean;
   present_o?: boolean;
 }
@@ -59,6 +62,20 @@ export interface FlagContext {
   guardOnDuty: boolean | null;
   /** The sheet or the tracker says this outward unit was not delivered. */
   notDelivered: boolean;
+  /**
+   * The Tracker's row for this unit and day says the job finished on a LATER
+   * date — an attempt, not a completion.
+   *
+   * WHY THIS IS A LABEL AND NOT A RULE (owner, 29 Sep 2026). The Tracker keeps
+   * one row per job, so a van that goes out on Saturday and succeeds on Monday
+   * leaves one row reading "finished Monday" either way. Two pickups on 26 Sep
+   * were identical in it — same created date, same later completion — and only
+   * the gate knew that one fridge was collected that evening and the other two
+   * days later. Measured over 20–28 Sep: 434 inward rows look like this, and
+   * 387 of them were confirmed that day by the gate, the sheet or Odoo. A rule
+   * that dropped them would fix 47 and break 387, so the row stays and says so.
+   */
+  attemptCompletedLater: boolean;
 }
 
 /** Pure: which flags a variance row carries. */
@@ -72,6 +89,16 @@ export function flagsFor(v: FlagInput, ctx: FlagContext): VarianceFlag[] {
   }
   if (v.direction === "OUT" && ctx.notDelivered) out.push(FLAG.NOT_DELIVERED);
   if (v.present_p === false && ctx.guardOnDuty === false) out.push(FLAG.GUARD_OFF_SHIFT);
+  // ONLY WHERE IT EXPLAINS SOMETHING: the Tracker alone has the unit. Where
+  // the gate, the sheet or Odoo also recorded it that day, the movement is not
+  // in doubt and the label is noise — 45 rows a day rather than 5 when it fired
+  // on every row whose job happened to close later.
+  if (
+    ctx.attemptCompletedLater &&
+    v.present_d === true && v.present_p === false && v.present_s === false && v.present_o === false
+  ) {
+    out.push(FLAG.ATTEMPT_LATER);
+  }
   return out;
 }
 

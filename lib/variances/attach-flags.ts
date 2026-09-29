@@ -17,6 +17,10 @@ import { normalizeStatus } from "@/lib/engine/util";
 import type { City } from "@/lib/sample-data";
 import { flagsFor, odooWindowEnd, type VarianceFlag } from "./flags";
 
+/** The IST calendar day of a stored timestamp, or null. */
+const istDay = (v: string | null): string | null =>
+  v ? new Date(Date.parse(v) + 5.5 * 3600_000).toISOString().slice(0, 10) : null;
+
 interface Row {
   run_id: string;
   business_date: string;
@@ -57,6 +61,7 @@ export async function attachFlags<T extends Row>(rows: T[]): Promise<(T & { flag
 
     const guardOnDuty = new Map<string, boolean | null>(); // city|day
     const notDelivered = new Set<string>(); // run|city|barcode (outward)
+    const attemptLater = new Set<string>(); // run|city|direction|barcode
 
     await Promise.all([...groups.entries()].map(async ([k, list]) => {
       const [city, day, runId] = k.split("|");
@@ -77,20 +82,31 @@ export async function attachFlags<T extends Row>(rows: T[]): Promise<(T & { flag
         }
       }
 
-      // NOT DELIVERED: the run's own sheet and tracker rows for these barcodes.
-      const outs = [...new Set(list.filter((r) => r.direction === "OUT").map((r) => r.barcode))];
-      for (let i = 0; i < outs.length; i += 200) {
+      // The run's own sheet and tracker rows for these units — two questions in
+      // one read: did a book say the outward was not delivered, and does the
+      // Tracker's own row close the job on a LATER date than the day it sits on?
+      const bcs = [...new Set(list.map((r) => r.barcode))];
+      for (let i = 0; i < bcs.length; i += 200) {
         const sr = await db.from("source_rows")
-          .select("source, status, barcode_canonical, raw")
-          .eq("run_id", runId).eq("city", city).eq("direction", "OUT")
+          .select("source, status, direction, barcode_canonical, movement_date, raw")
+          .eq("run_id", runId).eq("city", city)
           .in("source", ["SHEET", "DT"])
-          .in("barcode_canonical", outs.slice(i, i + 200));
+          .in("barcode_canonical", bcs.slice(i, i + 200));
         if (sr.error) continue;
-        for (const x of (sr.data ?? []) as { source: string; status: string | null; barcode_canonical: string; raw: { physicalStatus?: string } | null }[]) {
-          const nd = x.source === "SHEET"
-            ? normalizeStatus(x.status) === "not_done"
-            : /^not\s*done$/i.test(x.raw?.physicalStatus ?? "");
-          if (nd) notDelivered.add(`${runId}|${city}|${x.barcode_canonical}`);
+        for (const x of (sr.data ?? []) as { source: string; status: string | null; direction: string;
+                                             barcode_canonical: string; movement_date: string | null;
+                                             raw: { physicalStatus?: string } | null }[]) {
+          if (x.direction === "OUT") {
+            const nd = x.source === "SHEET"
+              ? normalizeStatus(x.status) === "not_done"
+              : /^not\s*done$/i.test(x.raw?.physicalStatus ?? "");
+            if (nd) notDelivered.add(`${runId}|${city}|${x.barcode_canonical}`);
+          }
+          // The Tracker's completion time is its own word for when the job
+          // closed. Later than the day it is filed under = this was an attempt.
+          if (x.source === "DT" && istDay(x.movement_date) && istDay(x.movement_date)! > day) {
+            attemptLater.add(`${runId}|${city}|${x.direction}|${x.barcode_canonical}`);
+          }
         }
       }
     }));
@@ -102,6 +118,7 @@ export async function attachFlags<T extends Row>(rows: T[]): Promise<(T & { flag
         nowMs,
         guardOnDuty: guardOnDuty.get(`${r.city}|${r.business_date}`) ?? null,
         notDelivered: notDelivered.has(`${r.run_id}|${r.city}|${r.barcode}`),
+        attemptCompletedLater: attemptLater.has(`${r.run_id}|${r.city}|${r.direction}|${r.barcode}`),
       }),
     }));
   } catch {

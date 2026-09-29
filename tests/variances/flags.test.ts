@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { flagsFor, isVendorJob, FLAG, odooWindowEnd } from "../../lib/variances/flags";
 
 
-const base = { odooWindowEndMs: null, nowMs: 0, guardOnDuty: null, notDelivered: false };
+const base = { odooWindowEndMs: null, nowMs: 0, guardOnDuty: null, notDelivered: false, attemptCompletedLater: false };
 
 describe("variance flags", () => {
   it("ODOO PENDING only while Odoo lacks it and the window is open", () => {
@@ -38,5 +38,23 @@ describe("variance flags", () => {
     expect(odooWindowEnd("DELHI", "2026-09-16", cal)).toBe(Date.parse("2026-09-18T15:00:00+05:30"));
     expect(odooWindowEnd("BANGALORE", "2026-09-16", cal)).toBe(Date.parse("2026-09-17T15:00:00+05:30"));
     expect(odooWindowEnd("DELHI", "2026-09-01", cal)).toBeNull(); // before the calendar-day cutover
+  });
+
+  // The Tracker keeps one row per job, so a van that goes out on Saturday and
+  // succeeds on Monday leaves a row reading "finished Monday" either way. The
+  // row stays on Saturday — see the note on FlagContext — and says why.
+  it("ATTEMPT — COMPLETED LATER when the tracker closed the job on a later date", () => {
+    const alone = { direction: "IN", job_type: null, present_d: true, present_p: false, present_s: false, present_o: false };
+    expect(flagsFor(alone, { ...base, attemptCompletedLater: true })).toEqual([FLAG.ATTEMPT_LATER]);
+    expect(flagsFor(alone, base)).toEqual([]);
+    // Another book saw it that day: the movement is not in doubt, so no label.
+    const corroborated = { ...alone, present_p: true };
+    expect(flagsFor(corroborated, { ...base, attemptCompletedLater: true })).toEqual([]);
+  });
+
+  it("labels an outward attempt too — the same row can be both", () => {
+    const v = { direction: "OUT", job_type: null, present_d: true, present_p: false, present_s: false, present_o: false };
+    expect(flagsFor(v, { ...base, attemptCompletedLater: true, notDelivered: true }))
+      .toEqual([FLAG.NOT_DELIVERED, FLAG.ATTEMPT_LATER]);
   });
 });
