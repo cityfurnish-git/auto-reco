@@ -78,9 +78,17 @@ export function digestRecipients(): string[] {
 
 // The link recipients click — always the stable production domain, never
 // VERCEL_URL (that is the per-deployment URL: deployment-protected, so email
-// recipients would hit a 403/login wall). NEXT_PUBLIC_APP_URL still overrides
-// for a future custom domain.
-const PROD_APP_URL = "https://auto-reco.vercel.app";
+// recipients would hit a 403/login wall). NEXT_PUBLIC_APP_URL still overrides,
+// which is how this was fixed in production hours before the constant was.
+//
+// Was auto-reco.vercel.app until 30 Sep 2026. Moving the Vercel project to the
+// company team created a SECOND project rather than renaming the first, so
+// that address belongs to the old deployment -- now deliberately silenced with
+// SCHEDULED_JOBS_DISABLED, and due to be retired. A digest is read days after
+// it is sent, so a link pointing at a project that is about to disappear is a
+// dead call-to-action in an inbox nobody will re-open. The custom domain is
+// the only address that follows the live deployment.
+const PROD_APP_URL = "https://auto-reco.cityfurnish.com";
 
 /**
  * Is this a link a RECIPIENT could actually open?

@@ -11,7 +11,7 @@ import {
 } from "../../lib/email/digest";
 import { renderHtml } from "../../lib/email/digest/render-html";
 
-const URL = "https://auto-reco.vercel.app/dashboard";
+const URL = "https://auto-reco.cityfurnish.com/dashboard";
 
 function digest(over: Partial<DigestData> = {}): DigestData {
   return {
@@ -282,7 +282,7 @@ describe("digest — column widths", () => {
 
 describe("digest — vocabulary", () => {
   it.each(FIXTURES)("uses no internal jargon (%s)", (_name, d) => {
-    // The deployment's own hostname is auto-reco.vercel.app, so URLs are
+    // The deployment's own hostname is auto-reco.cityfurnish.com, so URLs are
     // exempt — a link is not something a reader parses for vocabulary. Every
     // other surface, including raw markup, is checked.
     const deUrl = (s: string) => s.replace(/https?:\/\/\S+/g, "[link]");

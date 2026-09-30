@@ -9,7 +9,7 @@
 
 import { chromium, webkit } from "playwright";
 
-const BASE = process.argv[2] ?? "https://auto-reco.vercel.app";
+const BASE = process.argv[2] ?? "https://auto-reco.cityfurnish.com";
 // WEBKIT MATTERS MORE THAN CHROMIUM HERE. The guards use their own phones and
 // an iPhone runs WebKit whatever the browser badge says. Chromium reported a
 // clean page while a real iPhone showed "Script error" and then nothing —

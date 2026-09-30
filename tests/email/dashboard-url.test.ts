@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { dashboardUrl } from "../../lib/email";
 
-const PROD = "https://auto-reco.vercel.app/dashboard";
+const PROD = "https://auto-reco.cityfurnish.com/dashboard";
 const original = process.env.NEXT_PUBLIC_APP_URL;
 
 afterEach(() => {
@@ -36,7 +36,7 @@ describe("dashboardUrl — a recipient must be able to open it", () => {
   });
 
   it("ignores plain http even on a public host — mail clients flag it", () => {
-    expect(withEnv("http://auto-reco.vercel.app")).toBe(PROD);
+    expect(withEnv("http://auto-reco.cityfurnish.com")).toBe(PROD);
   });
 
   it("ignores junk rather than emitting a malformed link", () => {

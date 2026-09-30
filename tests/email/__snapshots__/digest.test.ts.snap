@@ -5,7 +5,7 @@ exports[`digest — model snapshot > richDay 1`] = `
   {
     "blocks": [
       {
-        "href": "https://auto-reco.vercel.app/dashboard",
+        "href": "https://auto-reco.cityfurnish.com/dashboard",
         "kind": "cta",
         "label": "View in dashboard",
       },
@@ -623,7 +623,7 @@ exports[`digest — model snapshot > threePart 1`] = `
   {
     "blocks": [
       {
-        "href": "https://auto-reco.vercel.app/dashboard",
+        "href": "https://auto-reco.cityfurnish.com/dashboard",
         "kind": "cta",
         "label": "View in dashboard",
       },
