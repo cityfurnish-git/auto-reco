@@ -291,13 +291,34 @@ export function taskForScan(tasks: UnitTask[], scannedAt: string, direction: str
   if (!scanDay) return null;
   const wanted = direction === "OUT" ? "delivery" : direction === "IN" ? "pickup" : null;
   if (!wanted) return null;
-  const inWindow = tasks.filter((t) => {
-    if (!t.date || t.kind !== wanted) return false;
+  const near = (t: UnitTask) => {
+    if (!t.date) return false;
     const d = dayDiff(t.date, scanDay);
     return d >= -TASK_WINDOW.daysBeforeScan && d <= TASK_WINDOW.daysAfterScan;
-  });
-  inWindow.sort((a, b) => Math.abs(dayDiff(a.date!, scanDay)) - Math.abs(dayDiff(b.date!, scanDay)));
-  return inWindow[0] ?? null;
+  };
+  const byNearest = (a: UnitTask, b: UnitTask) =>
+    Math.abs(dayDiff(a.date!, scanDay)) - Math.abs(dayDiff(b.date!, scanDay));
+  const ofKind = tasks.filter((t) => t.kind === wanted && near(t)).sort(byNearest);
+  if (ofKind[0]) return ofKind[0];
+
+  // A UNIT COMING BACK FROM A DELIVERY THAT DID NOT STICK (owner, 30 Sep 2026).
+  //
+  // Washing machine APMYGL25081042 left the gate at 09:35 on the 28th for
+  // Gauransh and was scanned back in at 18:46 the same evening — a van that
+  // returned full. There is no PICKUP task for that, because nobody planned a
+  // pickup; the only task is the delivery it failed. Matching pickups alone,
+  // the inward found nothing and fell back to the unit's last known job, and
+  // before the movement.ts fix it named a customer from twelve days earlier.
+  //
+  // So an inward with no pickup task takes the delivery task in the same
+  // window: whoever that unit was being taken to is who it is coming back
+  // from. Outward is untouched — a delivery is planned, and matching it to a
+  // pickup task would invent a journey.
+  if (direction === "IN") {
+    const delivery = tasks.filter((t) => t.kind === "delivery" && near(t)).sort(byNearest);
+    if (delivery[0]) return delivery[0];
+  }
+  return null;
 }
 
 /**

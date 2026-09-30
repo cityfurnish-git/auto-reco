@@ -93,6 +93,8 @@ interface TripItem {
    *  up by barcode from Odoo and DT after the scan — see migration 0039. */
   itemName: string | null; soDisplay: string | null; ticket: string | null;
   customer: string | null; jobType: string | null;
+  /** The name came from the ops sheet, not Odoo or the delivery app. */
+  customerFromSheet?: boolean;
   /** True when no DT task sits near the scan date and the unit's latest one is
    *  shown instead — labelled on screen and in the file, never passed off as
    *  this movement's. */
@@ -598,7 +600,24 @@ export function TripModal({ trip, onClose, onLookedUp }: {
                     return (
                       <td key={c.label}
                           className={`px-1.5 py-1.5 border border-border ${c.wrap ? (c.mono ? "min-w-[6rem] max-w-[9rem] break-words" : c.label === "Item Name" ? "min-w-[9rem] max-w-[15rem] break-words" : "min-w-[5.5rem] max-w-[12rem] break-words") : "whitespace-nowrap"} ${c.mono ? "font-mono text-[11.5px]" : ""} ${v ? "" : "text-text-muted"}`}>
-                        {v ?? (c.lookedUp && it.lookupPending && lookup === "running" ? "…" : "—")}
+                        {v ?? (c.lookedUp && it.lookupPending && lookup === "running"
+                          ? "…"
+                          // A DASH SAYS NOTHING (owner, 30 Sep 2026). Of 1,000
+                          // scans since 13 Sep, 78 had no customer anywhere —
+                          // no Odoo order, no delivery-app job, no sheet line.
+                          // That is a finding about the movement, not a screen
+                          // that failed to load, and it should read as one.
+                          // Said once per row, on the name — five columns all
+                          // announcing the same absence is noise.
+                          : c.label === "Customer Name" && !it.lookupPending
+                            ? <span title="No Odoo order, no delivery-app job and no ops-sheet line for this unit on this day.">not in any system</span>
+                            : "—")}
+                        {c.label === "Customer Name" && v && it.customerFromSheet && (
+                          <span className="badge badge-info mt-1 font-sans block w-fit whitespace-nowrap"
+                                title="Odoo and the delivery app had nothing for this unit today; this name is the ops sheet's own line for it.">
+                            from the ops sheet
+                          </span>
+                        )}
                         {c.label === "Ticket ID" && v && it.lastKnown && (
                           <span className="badge badge-medium mt-1 font-sans block w-fit whitespace-nowrap"
                                 title="No DT task within a few days of this scan. Showing the unit's most recent task instead.">

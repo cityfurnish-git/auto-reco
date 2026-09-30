@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { istDateOf, istDayRange, istToday, isIsoDate } from "./calendar";
 import { agentKey, commonestSpelling, transportKey } from "./transport";
 import { findDuplicates } from "./duplicates";
+import { canonicalize } from "@/lib/engine/barcode";
 
 export interface ActivityOptions {
   date?: string | null;
@@ -113,6 +114,34 @@ export async function loadActivity(admin: SupabaseClient, opts: ActivityOptions)
   const narrowed = !!(vehicle || agent);
   const dayScans = (sc.data ?? []) as unknown as Record<string, unknown>[];
   const tripDay = new Map(dayTrips.filter((t) => t.movement_date).map((t) => [t.id as string, t.movement_date as string]));
+  // THE OPS SHEET, LAST (owner, 30 Sep 2026). A gate row's name is looked up:
+  // Odoo's customer for the order first, then the delivery app's job. 78 of the
+  // 1,000 scans since 13 Sep had neither, and for 6 of them the ops sheet holds
+  // a name for the SAME unit on the SAME day. Only same-day, same-unit: the
+  // sheet's older rows are the unit's previous journey, which is exactly the
+  // stale-name bug fixed in lib/gate/movement.ts on the same day.
+  const unnamed = dayScans.filter((r) => !(r.customer ?? r.task_customer) && r.barcode);
+  const sheetNames = new Map<string, string>(); // city|canonical -> customer
+  if (unnamed.length > 0) {
+    try {
+      const codes = [...new Set(unnamed.map((r) => canonicalize(String(r.barcode))))];
+      for (let i = 0; i < codes.length; i += 200) {
+        const { data } = await admin
+          .from("source_rows")
+          .select("city, barcode_canonical, customer")
+          .eq("source", "SHEET")
+          .eq("business_date", date)
+          .in("barcode_canonical", codes.slice(i, i + 200));
+        for (const row of data ?? []) {
+          const c = (row.customer as string)?.trim();
+          if (c) sheetNames.set(`${row.city}|${row.barcode_canonical}`, c);
+        }
+      }
+    } catch {
+      /* the sheet is a nicety here; a failed read must not cost the page */
+    }
+  }
+
   const duplicates = findDuplicates(dayScans.map((r) => ({
     id: r.id as string, tripId: (r.trip_id as string) ?? null, city: (r.city as string) ?? null,
     // Same calendar day as everything else on this screen — the day a late
@@ -229,7 +258,11 @@ export async function loadActivity(admin: SupabaseClient, opts: ActivityOptions)
           taskDate: (r.task_date as string) ?? null,
           lastKnown: r.task_matched === false,
           ticket: (r.ticket_id as string) ?? (r.task_ticket as string) ?? null,
-          customer: (r.customer as string) ?? (r.task_customer as string) ?? null,
+          customer: (r.customer as string) ?? (r.task_customer as string)
+            ?? (r.barcode ? sheetNames.get(`${r.city}|${canonicalize(String(r.barcode))}`) ?? null : null),
+          /** The name came from the ops sheet, not Odoo or the delivery app. */
+          customerFromSheet: !(r.customer ?? r.task_customer) && !!r.barcode
+            && sheetNames.has(`${r.city}|${canonicalize(String(r.barcode))}`),
           jobType: (r.task_job_type as string) ?? null,
           // Whether a lookup is still owed, so the screen can say "looking up"
           // rather than a dash that reads as "there is nothing".
