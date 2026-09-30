@@ -13,6 +13,22 @@ places — they predate the gate subsystem and quote old cron times).
 
 ---
 
+## Where this lives now
+
+Moved to **github.com/cityfurnish-git/auto-reco** on 28 Sep 2026 (transferred, so
+the history came with it; the old `cityfurnish10/auto-reco` URL redirects). The
+Vercel project was transferred to the company's team on 30 Sep and keeps the
+same address, **auto-reco.vercel.app** — which matters because a guard's phone
+stores its pairing against that address and would need re-pairing if it changed.
+
+Production settings were trimmed at the same time. Gone: the paper-register
+machinery (AZURE_VISION_*, GDRIVE_*), the assistant (GROQ_*), and entries only
+laptops used (DATABASE_READONLY_URL, METABASE_USERNAME/PASSWORD — the API key
+is what the code prefers). **DT_MONGODB_DB and DT_TASKS_COLLECTION are NOT the
+defaults in the code; deleting them silently points the tracker at the wrong
+database.** GATE_APP_CITIES is `DELHI:2026-09-13` and is what keeps Delhi on the
+gate app rather than the register.
+
 ## Commands
 
 ```bash
