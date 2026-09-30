@@ -2,7 +2,11 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, parseSessionCookie } from "@/lib/demo-auth";
 
-const PUBLIC_PATHS = ["/login"];
+// /api/version carries no data — only which commit is serving this URL — and
+// is public so a deployment can be identified without logging in. That was the
+// gap on 30 Sep 2026: Vercel said "deployed", the site behaved like Friday, and
+// the only way to tell was to re-run a day and watch the engine.
+const PUBLIC_PATHS = ["/login", "/api/version"];
 const ADMIN_ONLY_PATHS = [
   "/users",
   "/system-health",
