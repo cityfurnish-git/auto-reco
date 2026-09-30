@@ -97,10 +97,26 @@ export function odooMoveForScan(moves: OdooMove[], scannedAt: string, direction:
     return near[0] ?? null;
   }
   if (direction === "IN") {
-    // The delivery that put it with the customer it is coming back from.
+    // The delivery that put it with the customer it is coming back from —
+    // ONLY IF THAT JOURNEY IS STILL OPEN.
+    //
+    // Reported 30 Sep 2026 on washing machine APMYGL25081042: the gate scanned
+    // it in at 18:46 on the 28th and the row said Shreya Mandal. Odoo's story:
+    // delivered to her on the 16th, RETURNED on the 23rd (In, done), then sent
+    // to Gauransh — whose Out line Odoo had not validated at all on the 28th.
+    // Taking "the last completed Out" reached back twelve days to a delivery
+    // that had already come home, and asserted it as the matched customer.
+    //
+    // A unit whose last completed movement is an In is sitting in the
+    // warehouse: an inward scan cannot be its return. Answer nothing instead,
+    // and the caller falls back to the unit's latest task, labelled "last
+    // known" — an honest blank beats a confident wrong name.
     const out = live.filter((m) => m.movementType === "Out" && m.state === "done" && Date.parse(m.date) <= at)
-      .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
-    return out[0] ?? null;
+      .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))[0];
+    if (!out) return null;
+    const cameBack = live.some((m) => m.movementType === "In" && m.state === "done"
+      && Date.parse(m.date) > Date.parse(out.date) && Date.parse(m.date) <= at);
+    return cameBack ? null : out;
   }
   return null;
 }
