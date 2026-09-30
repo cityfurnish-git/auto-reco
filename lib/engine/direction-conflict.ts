@@ -39,6 +39,24 @@ export function detectDirectionConflicts(
       continue;
     }
 
+    // BOTH LEGS MUST BE A MOVEMENT ON THIS DAY (owner, 30 Sep 2026).
+    //
+    // Odoo is pulled a day either side so a late posting can be matched to the
+    // day the goods moved. Those neighbouring rows build views like any other,
+    // and this check paired two of them: fridge FUUMPC24121005 went out on the
+    // 27th (gate 10:16, sheet, tracker, Odoo — all clean) and came back on the
+    // 29th (gate 21:36, Odoo 21:37). Both postings happen to be filed under the
+    // 28th in the raw feed, share sale order ON-RET-GUR-81950, and were paired
+    // into an urgent "same unit in and out today" for a day on which the unit
+    // did not move at all — its own row shows no floor book present.
+    //
+    // A leg is a movement on this day if a floor book recorded it, or Odoo
+    // posted it FOR this day. O.present alone is not enough: that is exactly
+    // the neighbouring-day posting this guard exists to exclude.
+    const movedToday = (v: BarcodeView) =>
+      v.P.present || v.S.present || v.D.present || !!v.odooSameDay;
+    if (!movedToday(inView) || !movedToday(outView)) continue;
+
     const outDone = hasDone(outView.D);
     // Read job type across BOTH legs (Section 7).
     const jobTypes = [inView.jobType, outView.jobType];
