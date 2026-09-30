@@ -16,10 +16,15 @@ places — they predate the gate subsystem and quote old cron times).
 ## Where this lives now
 
 Moved to **github.com/cityfurnish-git/auto-reco** on 28 Sep 2026 (transferred, so
-the history came with it; the old `cityfurnish10/auto-reco` URL redirects). The
-Vercel project was transferred to the company's team on 30 Sep and keeps the
-same address, **auto-reco.vercel.app** — which matters because a guard's phone
-stores its pairing against that address and would need re-pairing if it changed.
+the history came with it; the old `cityfurnish10/auto-reco` URL redirects). On Vercel the
+move made a **second project**, not a rename: the company team's project answers
+on **auto-reco.cityfurnish.com** (and auto-reco-one.vercel.app, which redirects
+to it), while the original Hobby project still owns **auto-reco.vercel.app** and
+still serves whatever was last pushed to it. Guards' phones store their pairing
+against auto-reco.vercel.app, so they are on the OLD project until they are
+re-paired one at a time, each drained first. Until then the old project must
+carry `SCHEDULED_JOBS_DISABLED=1` — left running it reconciles and emails a
+second time (seen 29 Sep: cron at 17:00 and again at 17:13 for the same day).
 
 Production settings were trimmed at the same time. Gone: the paper-register
 machinery (AZURE_VISION_*, GDRIVE_*), the assistant (GROQ_*), and entries only
