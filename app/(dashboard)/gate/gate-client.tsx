@@ -9,11 +9,12 @@
 // cities not yet on the app. That makes the pilot legible: a manager can see at
 // a glance which cities scan and which still upload a PDF.
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState } from "@/components/error-state";
 import { Icon } from "@/components/icon";
 import { Modal } from "@/components/modal";
 import { CITIES } from "@/lib/sample-data";
+import { canonicalize } from "@/lib/engine/barcode";
 import { groupVisits } from "@/lib/gate/transport";
 import { istToday } from "@/lib/gate/calendar";
 import { FILE_HEADER, REGISTER_COLUMNS, fileRow, shortDate } from "@/lib/gate/register";
@@ -167,9 +168,47 @@ function Activity({ user }: { user: SessionUser }) {
   // there, gathered under its truck. The gap is the manager's call — a yard
   // that reloads a truck for forgotten items within the hour reads differently
   // from one where the evening return is a separate event.
+  // FINDS, IT DOES NOT FILTER. A manager searching a barcode is asking "where
+  // is this unit in today's log" -- and the answer is only useful beside the
+  // trip it sits on, the guard who scanned it and what came off the same truck.
+  // Hiding every other row would answer a question nobody asked.
+  const [barcodeQ, setBarcodeQ] = useState("");
   const [grouped, setGrouped] = useState(false);
   const [gapHours, setGapHours] = useState(2);
   const [openVisits, setOpenVisits] = useState<Set<string>>(new Set());
+
+  // CANONICAL ON BOTH SIDES, so a barcode read off the sticker finds the one
+  // the scanner stored. The fold (O->0 I->1 S->5 Z->2 G->6) is the same one the
+  // engine dedups on, and a manager typing the letter O is the ordinary case,
+  // not the exception. Substring, so a remembered tail still finds the unit.
+  const needle = useMemo(() => canonicalize(barcodeQ.trim()), [barcodeQ]);
+  const hits = useMemo(() => {
+    if (!needle || !d) return null;
+    const trips = new Set<string>();
+    const items = new Set<string>();
+    const found: { trip: Trip; item: TripItem }[] = [];
+    for (const tr of d.trips) {
+      for (const it of tr.items) {
+        const hay = `${canonicalize(it.barcode ?? "")} ${canonicalize(it.serialNo ?? "")}`;
+        if (hay.includes(needle)) { trips.add(tr.id); items.add(it.id); found.push({ trip: tr, item: it }); }
+      }
+    }
+    // In the order the gate saw them: a unit that went out at 09:40 and came
+    // back at 19:12 reads as its own small story, and reversing it would hide
+    // that the outward leg came first.
+    found.sort((a, b) => a.item.scannedAt.localeCompare(b.item.scannedAt));
+    return { trips, items, found };
+  }, [needle, d]);
+
+  // PUT THE FIRST MATCH ON SCREEN. The highlight is worth nothing below the
+  // fold, and a 60-trip day is well past one screen. Only when the search
+  // changes -- scrolling on every re-render would fight the manager.
+  useEffect(() => {
+    const first = hits?.found[0];
+    if (!first) return;
+    const el = document.getElementById(`trip-${first.trip.id}`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [hits]);
 
   const load = useCallback(() => {
     const q = new URLSearchParams({ date });
@@ -192,8 +231,8 @@ function Activity({ user }: { user: SessionUser }) {
 
   /** One trip as a table row — on its own, or indented under its visit. */
   const tripRow = (tr: Trip, nested = false) => (
-                    <tr key={tr.id} onClick={() => setOpen(tr)}
-                        className={`border-t border-border hover:bg-surface-elevated cursor-pointer transition-colors duration-150${nested ? " text-[13px]" : ""}`}>
+                    <tr key={tr.id} id={`trip-${tr.id}`} onClick={() => setOpen(tr)}
+                        className={`border-t border-border hover:bg-surface-elevated cursor-pointer transition-colors duration-150${nested ? " text-[13px]" : ""}${hits?.trips.has(tr.id) ? " bg-accent-soft" : ""}`}>
                       <td className={`py-2.5 font-medium text-text-primary whitespace-nowrap ${nested ? "pl-9 pr-4" : "px-4"}`}>{tr.guardName || "—"}</td>
                       {/* As typed by the guard, with the stray spaces around
                           dashes closed up so "MT - T - DL-1L" reads as one plate. */}
@@ -284,9 +323,13 @@ function Activity({ user }: { user: SessionUser }) {
           <option value="">All agents</option>
           {(d?.agents ?? []).map((a) => <option key={a.key} value={a.key}>{a.label} ({a.trips})</option>)}
         </select>
-        {(guardId || direction || vehicle || agent || (!user.city && city)) && (
+        <input value={barcodeQ} onChange={(e) => setBarcodeQ(e.target.value)} aria-label="Find a barcode"
+          placeholder="Find a barcode…" spellCheck={false} autoComplete="off"
+          className="h-9 px-2.5 rounded-control border border-border bg-surface-card text-sm font-mono w-44"
+          title="Highlights this unit on today's trips. Searches the day on screen only." />
+        {(guardId || direction || vehicle || agent || barcodeQ || (!user.city && city)) && (
           <button className="btn btn-compact btn-secondary"
-            onClick={() => { setGuardId(""); setDirection(""); setVehicle(""); setAgent(""); setCity(user.city ?? ""); }}>
+            onClick={() => { setGuardId(""); setDirection(""); setVehicle(""); setAgent(""); setBarcodeQ(""); setCity(user.city ?? ""); }}>
             Clear
           </button>
         )}
@@ -358,6 +401,61 @@ function Activity({ user }: { user: SessionUser }) {
             </div>
           )}
 
+          {/* SAYS SO WHEN IT FINDS NOTHING. An empty highlight and a unit that
+              never crossed the gate look identical on a table of 60 trips, and
+              only one of them is a finding. */}
+          {hits && hits.found.length === 0 && (
+            <div className="card p-3 text-sm border border-warning/30">
+              No item matching <span className="font-mono">{barcodeQ.trim()}</span> on this day.
+              {" "}{/* NOT THE SAME AS "DID NOT MOVE", and a manager will read it
+                      as that unless it is said. The search is one day wide. */}
+              This searches {shortDate(date)} only — the unit may have moved on another day.
+            </div>
+          )}
+
+          {hits && hits.found.length > 0 && (
+            <div className="card overflow-x-auto">
+              <div className="px-4 py-2.5 text-sm border-b border-border bg-surface-elevated">
+                <b>{hits.found.length}</b> entr{hits.found.length === 1 ? "y" : "ies"} for{" "}
+                <span className="font-mono">{barcodeQ.trim()}</span> on{" "}
+                <b>{hits.trips.size}</b> trip{hits.trips.size === 1 ? "" : "s"}.
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    {["Time", "Direction", "Barcode", "Item", "Customer", "Guard", "Vehicle"].map((h) => (
+                      <th key={h} className="text-left px-4 py-2 text-xs uppercase tracking-wide text-text-muted whitespace-nowrap border-b border-border">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* CAPPED. A two-character search matches half the day, and a
+                      result card that fills the screen has stopped being an
+                      answer. The rest stay highlighted in the table below. */}
+                  {hits.found.slice(0, 10).map(({ trip: tr, item: it }) => (
+                    <tr key={it.id} onClick={() => setOpen(tr)}
+                        className="border-t border-border hover:bg-surface-elevated cursor-pointer transition-colors duration-150">
+                      <td className="px-4 py-2.5 whitespace-nowrap tabular-nums">{hhmm(it.scannedAt)}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-text-secondary">{tr.direction === "OUT" ? "Outward" : "Inward"}</td>
+                      <td className="px-4 py-2.5 font-mono text-[12px] whitespace-nowrap">{it.barcode ?? it.serialNo ?? "—"}</td>
+                      <td className="px-4 py-2.5 min-w-[9rem] max-w-[16rem] break-words">{it.itemName ?? it.product ?? "—"}</td>
+                      <td className={`px-4 py-2.5 min-w-[7rem] max-w-[12rem] break-words${it.customer ? "" : " text-text-muted"}`}>
+                        {it.customer ?? (it.lookupPending ? "…" : "not in any system")}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-text-secondary">{tr.guardName || "—"}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap font-medium tracking-wide">{tr.vehicleNo.replace(/\s*-\s*/g, "-")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {hits.found.length > 10 && (
+                <div className="px-4 py-2.5 text-xs text-text-muted border-t border-border">
+                  and {hits.found.length - 10} more — highlighted in the table below.
+                </div>
+              )}
+            </div>
+          )}
+
           {d.trips.length === 0 ? <Empty text="No trips recorded for these filters." /> : (
             <div className="card overflow-x-auto">
               <table className="w-full text-sm">
@@ -376,7 +474,11 @@ function Activity({ user }: { user: SessionUser }) {
                     lastActivityAt: x.items.reduce<string | null>((m, i) => (!m || i.scannedAt > m ? i.scannedAt : m), null),
                   })), gapHours * 3600_000).map((v) => {
                     const id = `${v.key}|${v.start}`;
-                    const isOpen = openVisits.has(id);
+                    // A hit inside a collapsed visit would highlight nothing a
+                    // manager can see, so the visit opens itself. Derived, not
+                    // written into openVisits: clearing the search must put the
+                    // table back exactly as the manager left it.
+                    const isOpen = openVisits.has(id) || !!(hits && v.trips.some((x) => hits.trips.has(x.id)));
                     const items = v.trips.reduce((n, x) => n + x.itemCount, 0);
                     const agentsOn = [...new Set(v.trips.map((x) => x.driverName).filter(Boolean))];
                     const spellings = [...new Set(v.trips.map((x) => x.vehicleNo))];
@@ -433,14 +535,17 @@ function Activity({ user }: { user: SessionUser }) {
       )}
 
       <TripModal trip={open ? (d?.trips.find((t) => t.id === open.id) ?? open) : null}
-                 onClose={() => setOpen(null)} onLookedUp={load} />
+                 onClose={() => setOpen(null)} onLookedUp={load} highlightItems={hits?.items} />
     </div>
   );
 }
 
 /** Everything about one trip, including the items the table only counts. */
-export function TripModal({ trip, onClose, onLookedUp }: {
+export function TripModal({ trip, onClose, onLookedUp, highlightItems }: {
   trip: Trip | null; onClose: () => void; onLookedUp: () => void;
+  /** Scan ids the barcode search matched, so the register row is findable in a
+   *  trip of forty. Optional: every other caller opens a trip with no search. */
+  highlightItems?: Set<string>;
 }) {
   const [photo, setPhoto] = useState<{ scanId?: string; tripId?: string; label: string } | null>(null);
   const [lookup, setLookup] = useState<"idle" | "running" | "failed">("idle");
@@ -594,7 +699,7 @@ export function TripModal({ trip, onClose, onLookedUp }: {
             </thead>
             <tbody>
               {trip.items.map((it) => (
-                <tr key={it.id} className={`align-top${it.duplicateOf ? " opacity-60" : ""}`}>
+                <tr key={it.id} className={`align-top${it.duplicateOf ? " opacity-60" : ""}${highlightItems?.has(it.id) ? " bg-accent-soft" : ""}`}>
                   {REGISTER_COLUMNS.map((c) => {
                     const v = c.value(trip, it);
                     return (

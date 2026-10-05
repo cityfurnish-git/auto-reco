@@ -64,6 +64,26 @@ const ALLOWED: { file: string; snippet: string; why: string }[] = [
     snippet: "{r.barcode ?? \"—\"}",
     why: "LABEL, and correct: a retracted gate scan's raw QR payload, shown so a manager can identify what was taken back.",
   },
+  // The barcode search on the Activity tab. The manager types a spelling off a
+  // sticker; gate_scans holds the raw QR payload. Folding BOTH sides is the
+  // whole point -- it is what makes "APZQN4..." find the scan the reader stored
+  // as "APZQN4..." with an O where the sticker prints a zero. Nothing here
+  // reaches a screen: the match drives a highlight, and the row that lights up
+  // renders its barcode through the register's own column.
+  {
+    file: "app/(dashboard)/gate/gate-client.tsx",
+    snippet: 'const hay = `${canonicalize(it.barcode ?? "")}',
+    why: "KEY: both sides folded so a typed spelling finds the scanned one. The match is a highlight, never a label.",
+  },
+  // The barcode search's result card. Same reasoning as the retracted-scan row
+  // above and the register's own Barcode column: this is gate_scans' raw QR
+  // payload, never a fold, so there is no true spelling to recover. Showing it
+  // is the point -- a manager is checking the code against the one on the unit.
+  {
+    file: "app/(dashboard)/gate/gate-client.tsx",
+    snippet: '{it.barcode ?? it.serialNo ?? "—"}</td>',
+    why: "LABEL, and correct: the scanner's raw payload for a matched search hit, shown so a manager can check it against the sticker.",
+  },
   {
     file: "app/(dashboard)/gate/gate-client.tsx",
     snippet: "label: it.barcode ?? it.serialNo",
