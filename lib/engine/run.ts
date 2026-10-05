@@ -38,6 +38,7 @@ import type {
   MovementEvent,
   Priority,
   ReportedSources,
+  SourceKind,
   SourceRow,
   VarianceRowOut,
 } from "./types";
@@ -631,7 +632,31 @@ export function runReconciliation(
   // Strict by choice: the owner asked for the version that needs the Tracker's
   // own Not Done row, not the wider "sheet says Not Delivered" one. A unit the
   // Tracker knows nothing about still grades as before.
+  //
+  // THE TRACKER CONDITION IS GONE (owner, 5 Oct 2026). It used to require ONE
+  // Tracker row for the unit, saying Not Done or completed on a later day. The
+  // owner's rule now reads: judge a failed delivery on the two books that
+  // witness the yard — the guard and the ops sheet — and ask only whether BOTH
+  // legs are there. The Tracker keeps one rewritten row per job and is the
+  // least reliable witness to a same-day return, which is what made it a
+  // condition worth dropping rather than keeping.
+  //
+  // AND THE ONE-WAY CASE IS NOW RAISED. A unit the sheet dispatched and marked
+  // Not Delivered, with NO return in either book, is a unit that left the
+  // building and that no book says came back. Until today that was silently
+  // dropped by the done-tasks-only rule above — the retirement of
+  // FAILED_DELIVERY on 5 Aug took the honest finding out with the false ones.
+  // Measured 22–29 Sep: 0–4 units a day, against 24–45 failed dispatches.
+  //
+  // THE MIDDLE BAND IS DELIBERATELY UNTOUCHED: the sheet logs a return but the
+  // gate does not. Four of five cities have had no gate book at all since
+  // August, so "no return logged" would be a false accusation roughly twenty
+  // times a day there — exactly the false-chase class the 5 Aug return-leg rule
+  // was written to kill. Those units grade as they always did and carry the
+  // NOT DELIVERED label. A missing gate entry beside a present sheet entry is
+  // gate-log hygiene, not a lost unit.
   const notDeliveredUnits = new Set<string>();
+  const failedNoReturn: { canon: string; rows: SourceRow[]; out: SourceRow }[] = [];
   {
     const byCanon = new Map<string, SourceRow[]>();
     for (const r of preFilter) {
@@ -639,40 +664,76 @@ export function runReconciliation(
       byCanon.set(k, [...(byCanon.get(k) ?? []), r]);
     }
     for (const [canon, rows] of byCanon) {
-      const guard = rows.filter((r) => r.source === "PHYSICAL");
-      const guardBothWays =
-        guard.some((r) => r.direction === "IN") && guard.some((r) => r.direction === "OUT");
-      if (!guardBothWays) continue;
-      const sheetOutFailed = rows.some(
+      const sheetOut = rows.find(
         (r) => r.source === "SHEET" && r.direction === "OUT" && normalizeStatus(r.status) === "not_done"
       );
+      if (!sheetOut) continue;
+      // DONE WINS, AND ONLY THE SHEET GETS A VOTE. Two ops lines for one unit,
+      // one "Delivered" and one "Not Delivered", is ambiguous — and a
+      // completion claim exists, so it must not be waved through as a failure
+      // in either direction (neither suppressed nor raised). The gate register
+      // and the Tracker are deliberately NOT consulted here: both hard-code
+      // "done" to mean "a record exists", never "the delivery succeeded"
+      // (invariant 3), which is the whole reason this rule has to exist.
+      if (rows.some((r) => r.source === "SHEET" && r.direction === "OUT" && normalizeStatus(r.status) === "done")) {
+        continue;
+      }
+      const guard = rows.filter((r) => r.source === "PHYSICAL");
+      const guardOut = guard.some((r) => r.direction === "OUT");
+      const guardIn = guard.some((r) => r.direction === "IN");
       const sheetBackIn = rows.some(
         (r) => r.source === "SHEET" && r.direction === "IN" && normalizeStatus(r.status) === "done"
       );
-      if (!sheetOutFailed || !sheetBackIn) continue;
-      const dt = rows.filter((r) => r.source === "DT");
-      if (dt.length !== 1) continue;
-      // "NOT DONE" HAS TWO SPELLINGS IN THIS BOOK (owner, 21 Sep 2026).
-      //
-      // The plain one, and the one the Tracker leaves behind after a retry: it
-      // keeps ONE row per job and rewrites it, so the 18th's "Not Done" became
-      // "Done" the moment the 20th's attempt succeeded. The completion time
-      // stays, and a row sitting on the 18th that completed on the 20th says
-      // the same thing the erased value said — this day's attempt failed.
-      // Delhi's 18th: 10 of 131 Tracker rows carry a later completion date.
-      //
-      // Only ever a LATER day. An earlier one is a re-date or a backfill and
-      // must not silence a leg.
-      const finishedLater = (utcToIstDate(dt[0].movementDate) ?? "") > runDate;
-      if (!/not\s*done/i.test(dt[0].physicalStatus ?? "") && !finishedLater) continue;
-      suppressed.add(`IN::${canon}`);
-      suppressed.add(`OUT::${canon}`);
-      notDeliveredUnits.add(canon);
+      if (guardOut && guardIn && sheetBackIn) {
+        suppressed.add(`IN::${canon}`);
+        suppressed.add(`OUT::${canon}`);
+        notDeliveredUnits.add(canon);
+      } else if (!guardIn && !sheetBackIn) {
+        failedNoReturn.push({ canon, rows, out: sheetOut });
+      }
     }
   }
+  // The rows for the one-way case, built from the sheet's own dispatch line
+  // rather than a BarcodeView: the done-tasks-only rule has already taken this
+  // unit out of reconciliation, so no view exists for the leg. Same shape the
+  // other non-ladder variances use (direction-conflict.ts, odd-hour-trips.ts).
+  for (const { canon, rows, out } of failedNoReturn) {
+    const meta = VARIANCE_META[VARIANCE.FAILED_DELIVERY];
+    const outRows = rows.filter((r) => r.direction === "OUT");
+    const has = (src: SourceKind) => outRows.some((r) => r.source === src);
+    variances.push({
+      barcode: canon,
+      // The sheet's own spelling: it is the book that recorded the dispatch,
+      // and the only one that recorded it failing.
+      barcode_display: out.barcode,
+      city,
+      direction: "OUT",
+      variance_name: VARIANCE.FAILED_DELIVERY,
+      priority: "High",
+      bucket: meta.bucket,
+      responsible: meta.responsible,
+      ticket_id: out.ticketId ?? null,
+      so_number: out.soNumber ?? null,
+      customer: out.customer ?? null,
+      product: out.product ?? null,
+      job_type: out.jobType ?? null,
+      date: runDate,
+      present: { P: has("PHYSICAL"), S: true, D: has("DT"), O: has("ODOO") },
+      note:
+        `The ops sheet dispatched this unit and marked it Not Delivered, and no book records it coming back — ` +
+        `neither the gate register nor the sheet's inward side. Confirm the unit is physically back at the warehouse ` +
+        `and write the return into the inward register; if it never came back, trace it.`,
+    });
+  }
+  if (failedNoReturn.length > 0) {
+    warnings.push(
+      `${failedNoReturn.length} failed dispatch${failedNoReturn.length === 1 ? "" : "es"} with no return logged in either book — raised for tracing`
+    );
+  }
+
   if (notDeliveredUnits.size > 0) {
     warnings.push(
-      `${notDeliveredUnits.size} unit${notDeliveredUnits.size === 1 ? "" : "s"} went out and came back the same day — not delivered, confirmed by the gate, the sheet and the tracker; neither leg raised`
+      `${notDeliveredUnits.size} unit${notDeliveredUnits.size === 1 ? "" : "s"} went out and came back the same day — not delivered, confirmed by the gate and the sheet on both legs; neither leg raised`
     );
   }
 
