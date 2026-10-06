@@ -141,7 +141,7 @@ describe("summariseAgeing — the table", () => {
     const s = summariseAgeing(rows, REPORT, FRESH);
     expect(s.cities.map((c) => c.city)).toEqual(["DELHI", "PUNE"]);
     expect(s.cities[0].items).toBe(7);
-    expect(s.cities[0].kinds[0]).toEqual({ label: "Missing in system", count: 5 });
+    expect(s.cities[0].kinds[0]).toEqual({ label: "Only the gate log has it", count: 5 });
     expect(s.total).toBe(8);
   });
 

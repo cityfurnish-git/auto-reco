@@ -51,6 +51,8 @@ export const ABSENCE_CLAIM: Record<string, readonly SourceKey[]> = {
   // A status contradiction between books that all hold the unit.
   [VARIANCE.SHEET_NOT_DONE_BUT_POSTED]: [],
   [VARIANCE.ODOO_ONLY_TODAY]: ["P", "S", "D"],
+  [VARIANCE.SHEET_DT_ODOO_NO_GATE]: ["P"],
+  [VARIANCE.GATE_DT_ODOO_NO_SHEET]: ["S"],
 
   // ── INFO ────────────────────────────────────────────────────────────────
   [VARIANCE.OPS_ODOO_NO_GATE]: ["P"],

@@ -108,6 +108,16 @@ export const VARIANCE_META: Record<string, VarianceMeta> = {
     responsible: "odoo_team",
     note: "The floor confirmed this movement for the day, and the Odoo entry does exist — it was just posted a day late (the 1-day buffer picked it up). No action; the entry is made.",
   },
+  [VARIANCE.SHEET_DT_ODOO_NO_GATE]: {
+    bucket: "REAL",
+    responsible: "warehouse_team",
+    note: "The ops sheet, the delivery app and Odoo all hold this movement; the gate register has no line for it. Find out how the unit passed the gate unrecorded.",
+  },
+  [VARIANCE.GATE_DT_ODOO_NO_SHEET]: {
+    bucket: "REAL",
+    responsible: "ops_team",
+    note: "The gate, the delivery app and Odoo all hold this movement; the ops sheet has no line for it. Add the line so the sheet matches what three systems already agree happened.",
+  },
   [VARIANCE.ODD_HOUR_TRIP]: {
     // REAL and High (owner, 24 Sep 2026). Measured on the gate app, 1 Aug –
     // 23 Sep: 123 of 141 outward trips opened between 9am and noon and exactly
@@ -145,8 +155,10 @@ export const VARIANCE_META: Record<string, VarianceMeta> = {
     responsible: "odoo_team",
     note: "The floor recorded this movement and Odoo does have the unit — the entry was posted a few days after the goods moved, which is normal for vendor receipts. No action; the entry is made.",
   },
+  // REAL since 6 Oct 2026 (owner): three books hold the unit and the Tracker
+  // does not, which is the same evidence shape as the other three-book rows.
   [VARIANCE.GATE_OPS_ODOO_NO_DT]: {
-    bucket: "INFO",
+    bucket: "REAL",
     // The missing thing is the DT scan, so this belongs to the delivery team —
     // it was assigned to odoo_team, which sent the chase to the one team whose
     // record is already present. OPS_ODOO_NO_DT below is the near-identical

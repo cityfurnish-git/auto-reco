@@ -30,11 +30,13 @@ const SOURCE_OF: Record<string, SourceLabel> = {
   // Ops sheet is the source
   [VARIANCE.SHEET_ONLY]: "Sheet",
   [VARIANCE.DT_ODOO_NO_SHEET]: "Sheet",
+  [VARIANCE.GATE_DT_ODOO_NO_SHEET]: "Sheet",
   [VARIANCE.FAILED_DELIVERY]: "Sheet",
   [VARIANCE.SHEET_NOT_DONE_BUT_POSTED]: "Cross",
   // Physical / gate register
   [VARIANCE.GATE_ONLY]: "Physical",
   [VARIANCE.OPS_ODOO_NO_GATE]: "Physical",
+  [VARIANCE.SHEET_DT_ODOO_NO_GATE]: "Physical",
   [VARIANCE.GATE_ODOO_NO_OPS_DT]: "Physical",
   [VARIANCE.FIELD_MISMATCH]: "Physical", // OCR noise — guard scan the usual culprit
   [VARIANCE.DUPLICATE]: "Physical",

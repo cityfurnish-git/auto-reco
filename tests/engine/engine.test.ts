@@ -879,7 +879,7 @@ describe("Section 6 — variance ladder", () => {
     );
   });
 
-  it("P+S+O no D → Odoo Update Pending (INFO, dampened)", () => {
+  it("P+S+O no D → three books agree, the tracker does not: REAL (owner, 2026-10-06)", () => {
     const res = one([
       { source: "PHYSICAL" },
       { source: "SHEET" },
@@ -887,10 +887,11 @@ describe("Section 6 — variance ladder", () => {
     ]);
     const v = res.variances[0];
     expect(v.variance_name).toBe(VARIANCE.GATE_OPS_ODOO_NO_DT);
-    expect(v.bucket).toBe("INFO");
-    expect(v.priority).toBe("Info");
-    expect(v.dampened).toBe(true);
-    expect(v.original_priority).toBe("Info");
+    // Promoted from INFO on 6 Oct 2026: three independent books holding the
+    // unit makes the fourth book's silence somebody's job, not an audit note.
+    // No longer dampened, so it keeps the priority the ladder gave it.
+    expect(v.bucket).toBe("REAL");
+    expect(v.priority).toBe("High");
   });
 
   it("all four present & consistent → no variance", () => {
@@ -1140,7 +1141,9 @@ describe("OCR-tolerant merge — dampen guard variances from OCR slips", () => {
       "MUMBAI"
     );
     expect(hasReal(res, VARIANCE.GATE_ONLY)).toBe(true);
-    expect(hasReal(res, VARIANCE.OPS_ODOO_NO_GATE)).toBe(true);
+    // Sheet + DT + Odoo with no guard book is the THREE-book shape, split out
+    // of OPS_ODOO_NO_GATE on 6 Oct 2026 so it could be chased on its own.
+    expect(hasReal(res, VARIANCE.SHEET_DT_ODOO_NO_GATE)).toBe(true);
     expect(res.warnings.some((w) => w.startsWith("OCR merge"))).toBe(false);
   });
 
@@ -1313,7 +1316,7 @@ describe("Inward DT quantity-aggregation — DT-missing INFO suppressed for inwa
     expect(v?.priority).toBe("Info");
   });
 
-  it("NEGATIVE — OUT, P+S+O no D: outward DT-missing INFO still fires (inward-only scope)", () => {
+  it("NEGATIVE — OUT, P+S+O no D: the outward tracker gap still fires (inward-only scope)", () => {
     const res = runReconciliation(
       [
         ...anchor(),
@@ -1325,7 +1328,7 @@ describe("Inward DT quantity-aggregation — DT-missing INFO suppressed for inwa
     );
     const v = res.variances.find((x) => x.barcode === canonicalize("WASH-OUT-1"));
     expect(v?.variance_name).toBe(VARIANCE.GATE_OPS_ODOO_NO_DT);
-    expect(v?.bucket).toBe("INFO");
+    expect(v?.bucket).toBe("REAL");
   });
 });
 

@@ -32,6 +32,21 @@ export const VARIANCE = {
    * lib/reconcile/odd-hour-trips.ts.
    */
   ODD_HOUR_TRIP: "ODD HOUR TRIP — Movement at a Time the Gate Rarely Sees",
+  /**
+   * THREE BOOKS HAVE IT AND ONE DOES NOT (owner, 6 Oct 2026). These two were
+   * split out so the three-book cases can be chased while the two-book ones
+   * stay informational — the owner's rule is that three independent records
+   * agreeing makes the fourth book's silence somebody's job.
+   *
+   * SHEET_DT_ODOO_NO_GATE was previously folded into OPS_ODOO_NO_GATE, which
+   * covered BOTH the two-book and three-book shapes under one name; it could
+   * not be promoted or named clearly without separating them.
+   *
+   * GATE_DT_ODOO_NO_SHEET had no name at all: of the fifteen ways four books
+   * can disagree, it was the only one the ladder answered with silence.
+   */
+  SHEET_DT_ODOO_NO_GATE: "Sheet + DT + Odoo Confirm — Missing from Gate Register",
+  GATE_DT_ODOO_NO_SHEET: "Gate + DT + Odoo Confirm — Missing from Ops Sheet",
 
   // ── INFO — audit / posting-lag, no chase ───────────────────────────────
   // Measured 2026-07-20: 220/230 of these ALSO had a DT scan — Sheet+DT+Odoo,

@@ -59,6 +59,12 @@ export function classify(
     return { variance_name: VARIANCE.SHEET_ONLY, priority: "High" };
 
   // 6. S + O, no P — only meaningful when the guard register reported.
+  // SPLIT ON THE TRACKER (owner, 6 Oct 2026). One name used to cover both the
+  // two-book shape (sheet + Odoo) and the three-book one (sheet + Tracker +
+  // Odoo), which made the stronger case impossible to chase separately or to
+  // name in a way a manager could read.
+  if (S && O && D && !P && rep.P)
+    return { variance_name: VARIANCE.SHEET_DT_ODOO_NO_GATE, priority: "High" };
   if (S && O && !P && rep.P)
     return { variance_name: VARIANCE.OPS_ODOO_NO_GATE, priority: "High" };
 
@@ -96,9 +102,10 @@ export function classify(
   if (D && O && !S && !P && rep.S)
     return { variance_name: VARIANCE.DT_ODOO_NO_SHEET, priority: "Info" };
 
-  // 10. P + S + O, no D.
+  // 10. P + S + O, no D. REAL since 6 Oct 2026 (owner) — three books agreeing
+  //     is strong enough evidence that the fourth book's gap is somebody's job.
   if (P && S && O && !D && rep.D)
-    return { variance_name: VARIANCE.GATE_OPS_ODOO_NO_DT, priority: "Info" };
+    return { variance_name: VARIANCE.GATE_OPS_ODOO_NO_DT, priority: "High" };
 
   // 11. P + O only.
   if (P && O && !S && !D)
@@ -116,6 +123,22 @@ export function classify(
   //      (P || S || D) clause keeps them mutually exclusive.)
   if (O && !v.odooSameDay && v.odooNextDay && (P || S || D))
     return { variance_name: VARIANCE.ODOO_POSTED_NEXT_DAY, priority: "Info" };
+
+  // 12c. P + D + O, no S. THE ONE COMBINATION THE LADDER USED TO ANSWER WITH
+  //      SILENCE: of the fifteen ways four books can disagree, fourteen raised
+  //      something and this one did not.
+  //
+  //      DELIBERATELY BELOW 12b, and the ordering is the whole subtlety. A unit
+  //      whose Odoo presence is only a NEXT-DAY posting has always graded as
+  //      "entry made late", which is why this gap never showed in live data —
+  //      12b was catching the common shape. Placed above 12b it would steal
+  //      those rows and report a late Odoo posting as a missing sheet line,
+  //      which is true but not the finding. What is left here is the genuine
+  //      hole: Odoo posted the same day, three books hold the unit, and the
+  //      sheet has no line. Measured 0 of 7,409 units over five days, so this
+  //      costs nothing today and catches the first Delhi sheet line that drops.
+  if (P && D && O && !S && rep.S)
+    return { variance_name: VARIANCE.GATE_DT_ODOO_NO_SHEET, priority: "High" };
 
   // 13. Every reported source present but barcodes differ → OCR noise.
   //

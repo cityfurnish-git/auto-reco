@@ -30,15 +30,16 @@ const CONTEXTS: LabelContext[] = [
 ];
 
 describe("variance labels — coverage", () => {
-  it("covers all 26 canonical names exactly once", () => {
+  it("covers all 28 canonical names exactly once", () => {
     // The count is deliberately hard-coded rather than derived from VARIANCE:
     // a new name has to be a conscious edit here, which is what forces its
     // author to give it a label instead of letting it fall through to
     // "Unclassified" on every screen. 23rd: ODOO_POSTED_LATE (2026-08-10).
     // 24th: ODOO_OUT_PENDING (2026-09-14). 25th: OT_CASE (2026-09-18).
-    // 26th: ODD_HOUR_TRIP (2026-09-24).
-    expect(NAMES).toHaveLength(26);
-    expect(new Set(NAMES).size).toBe(26);
+    // 26th: ODD_HOUR_TRIP (2026-09-24). 27th and 28th: the two three-book
+    // splits, SHEET_DT_ODOO_NO_GATE and GATE_DT_ODOO_NO_SHEET (2026-10-06).
+    expect(NAMES).toHaveLength(28);
+    expect(new Set(NAMES).size).toBe(28);
     expect(Object.keys(VARIANCE_LABELS).sort()).toEqual([...NAMES].sort());
   });
 
@@ -214,7 +215,7 @@ describe("variance labels — the engine's downgrade wins", () => {
     // The "missing from one book" labels are INFO-bucket by design and must stay tier 2 —
     // a blanket "INFO means tier 3" would empty the amber tier.
     const regGap = labelFor(VARIANCE.OPS_ODOO_NO_GATE, { bucket: "INFO" });
-    expect(regGap.display).toBe("Missing from the gate register");
+    expect(regGap.display).toBe("Not in gate log or tracker");
     expect(regGap.tier).toBe(2);
   });
 });
@@ -230,7 +231,7 @@ describe("a cleared gap is recognised by two different signals", () => {
   // which empties the whole amber tier. Five of the six tier-2 names are
   // natural INFO, so that is not a corner case, it is the majority.
   const REAL_TIER2 = VARIANCE.PICKUP_ODOO_OPEN;   // "Odoo Entry Missing"
-  const INFO_TIER2 = VARIANCE.OPS_ODOO_NO_GATE;   // "Missing from the gate register"
+  const INFO_TIER2 = VARIANCE.OPS_ODOO_NO_GATE;   // "Not in gate log or tracker"
 
   it("clears a REAL-named tier-2 row when the bucket was downgraded", () => {
     expect(labelFor(REAL_TIER2, { direction: "OUT" }).tier).toBe(2);
@@ -242,7 +243,7 @@ describe("a cleared gap is recognised by two different signals", () => {
   it("does NOT clear a naturally-INFO row just because it is INFO", () => {
     // The regression this whole design turns on.
     const asFound = labelFor(INFO_TIER2, { direction: "OUT", bucket: "INFO" });
-    expect(asFound.display).toBe("Missing from the gate register");
+    expect(asFound.display).toBe("Not in gate log or tracker");
     expect(asFound.tier).toBe(2);
   });
 

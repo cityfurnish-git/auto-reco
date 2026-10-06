@@ -11,6 +11,22 @@
 // DIRECTION_LABEL) because it is presentation. It must NEVER be imported by
 // lib/engine/* — the engine does not branch on how a thing is displayed.
 //
+// THE NAMING SCHEME (owner, 6 Oct 2026): a display name says WHICH BOOKS LACK
+// the unit, in plain words, and nothing else. With four books the missing list
+// alone carries the strength of the evidence, so no count is needed:
+//
+//   one book missing   "Not in Odoo"              three books agree — strongest
+//   two missing        "Not in tracker or Odoo"   two agree
+//   three missing      "Only the sheet has it"    one book — weakest
+//
+// Books are named the same way everywhere: gate log, sheet, tracker, Odoo.
+// Never "DT", never "Ops", never "+ Confirm —" — those are the engine's words.
+//
+// WHAT THIS REPLACED, and why it mattered: "Missing in system" was the display
+// for THREE different variances (gate only, sheet only, gate + sheet) and
+// "Missing on ground" for two more. A manager reading either could not tell
+// which book was short, which is the one thing the row exists to say.
+//
 // THE TIER RULE, which decides every case below:
 //   Tier 1  we cannot prove where the unit is.
 //   Tier 2  we know where it is; a record needs fixing.
@@ -85,56 +101,56 @@ interface LabelRule {
 // and two names sharing a label cannot drift apart.
 
 const SYSTEM_ONLY_ODOO: VarianceLabel = {
-  display: "Missing on ground",
+  display: "Only Odoo has it · booked today",
   tier: 1,
   risk: "Odoo booked a customer movement today that nobody at the gate, on the sheet or in the app saw.",
   action: "Confirm the unit moved, or cancel the Odoo entry.",
 };
 
 const SYSTEM_ONLY_APP: VarianceLabel = {
-  display: "Missing on ground",
+  display: "Only the tracker has it",
   tier: 1,
   risk: "Only the delivery app says this unit moved; nobody on the floor logged it.",
   action: "Confirm the unit physically left, or void the app entry.",
 };
 
 const OFF_SYSTEM_GATE: VarianceLabel = {
-  display: "Missing in system",
+  display: "Only the gate log has it",
   tier: 1,
   risk: "Only the guard saw this unit leave — nothing else in the business recorded it.",
   action: "Trace the unit, then record it on the sheet, the app and Odoo.",
 };
 
 const OFF_SYSTEM_SHEET: VarianceLabel = {
-  display: "Missing in system",
+  display: "Only the sheet has it",
   tier: 1,
   risk: "Only the ops sheet says this moved; the guard, the app and Odoo have nothing.",
   action: "Confirm the movement happened, then record it everywhere.",
 };
 
 const OFF_SYSTEM_FLOOR: VarianceLabel = {
-  display: "Missing in system",
+  display: "Not in tracker or Odoo",
   tier: 1,
   risk: "The unit left the gate and neither the delivery app nor Odoo knows it went.",
   action: "Find the order, scan it in the app, post it in Odoo.",
 };
 
 const UNLOGGED_ARRIVAL_GATE: VarianceLabel = {
-  display: "Missing in system · arrival",
+  display: "Only the gate log has it · arrival",
   tier: 2,
   risk: "A unit came in past the guard and no system has it — we are holding stock the books do not show.",
   action: "Add it to the sheet and book it into Odoo.",
 };
 
 const UNLOGGED_ARRIVAL_SHEET: VarianceLabel = {
-  display: "Missing in system · arrival",
+  display: "Only the sheet has it · arrival",
   tier: 2,
   risk: "The sheet has an arrival nothing else recorded, so the count on hand is unproven.",
   action: "Confirm the unit is on the floor and book it in.",
 };
 
 const UNLOGGED_ARRIVAL_FLOOR: VarianceLabel = {
-  display: "Missing in system · arrival",
+  display: "Not in tracker or Odoo · arrival",
   tier: 2,
   risk: "Both floor books have the arrival; the app and Odoo do not, so it is not counted as available.",
   action: "Scan it in the app and post the receipt in Odoo.",
@@ -315,29 +331,29 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
 
   [VARIANCE.OPS_ODOO_NO_GATE]: {
     base: registerGap(
-      "Missing from the gate register",
-      "The sheet, the app and Odoo all have it; only the guard's book missed the line.",
+      "Not in gate log or tracker",
+      "The sheet and Odoo have the movement; neither the gate log nor the tracker does.",
       "Remind the guard post to write every unit in the book."
     ),
   },
   [VARIANCE.OPS_ODOO_NO_DT]: {
     base: registerGap(
-      "No tracker record",
+      "Not in tracker · no gate log",
       "The sheet and Odoo both have the movement; the delivery app has no scan for it.",
       "Ask the team to scan every unit at handover."
     ),
   },
   [VARIANCE.DT_ODOO_NO_SHEET]: {
     base: registerGap(
-      "Not in the sheet",
-      "The app and Odoo both have the movement; the ops sheet has no line for it.",
+      "Not in gate log or sheet",
+      "The tracker and Odoo have the movement; neither the gate log nor the sheet does.",
       "Add the missing line to the ops sheet."
     ),
   },
   [VARIANCE.GATE_OPS_ODOO_NO_DT]: {
     base: registerGap(
-      "No tracker scan",
-      "The guard's book, the sheet and Odoo agree; only the app scan is missing.",
+      "Not in the tracker",
+      "The gate log, the sheet and Odoo all agree the unit moved; only the tracker has no scan.",
       "Scan the unit in the app to close the record."
     ),
   },
@@ -352,7 +368,7 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
   // ── Tier 3 ────────────────────────────────────────────────────────────────
   [VARIANCE.ODOO_ONLY]: {
     base: ODOO_DELAY(
-      "Missing on ground · posted late",
+      "Only Odoo has it · posted late",
       "An older Odoo entry was posted today; the floor records for it sit on the day it actually moved."
     ),
   },
@@ -397,6 +413,24 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
     ),
   },
   [VARIANCE.ADJACENT_DAY]: { base: LATE_PAPERWORK },
+
+  // THREE BOOKS AGREE AND ONE DOES NOT. Tier 2, not tier 1: with three
+  // independent records holding the unit, where it is was never in doubt —
+  // what is missing is a line in the fourth book, and somebody owns writing it.
+  [VARIANCE.SHEET_DT_ODOO_NO_GATE]: {
+    base: registerGap(
+      "Not in the gate log",
+      "The sheet, the tracker and Odoo all have this movement; the gate log has no line for it, so the unit passed the gate unrecorded.",
+      "Find out how the unit crossed the gate without being logged."
+    ),
+  },
+  [VARIANCE.GATE_DT_ODOO_NO_SHEET]: {
+    base: registerGap(
+      "Not in the sheet",
+      "The gate log, the tracker and Odoo all have this movement; the ops sheet has no line for it.",
+      "Add the line to the ops sheet."
+    ),
+  },
 };
 
 /**
