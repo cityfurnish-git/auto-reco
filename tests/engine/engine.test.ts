@@ -978,7 +978,7 @@ describe("Section 7 — suppressions", () => {
     expect(res.summary.consumable_count).toBeGreaterThanOrEqual(1);
   });
 
-  it("Silent OCR/SO-match never appears in output", () => {
+  it("a second barcode on the same order is now reported, not silenced (owner, 2026-10-06)", () => {
     const res = runReconciliation(
       [
         // Physical has the SO under barcode SOFA-AAAAA…
@@ -991,10 +991,16 @@ describe("Section 7 — suppressions", () => {
       ],
       "MUMBAI"
     );
-    // SOFA-BBBBB is missing from physical but shares SO-1 + product → silent.
-    expect(
-      res.variances.find((v) => v.barcode === canonicalize("SOFA-BBBBB"))
-    ).toBeUndefined();
+    // SOFA-BBBBB is missing from the guard book and shares SO-1 and the product
+    // with a unit that is there. The retired rule read that as one mis-written
+    // barcode and suppressed it silently. With the paper register gone, the only
+    // guard book left reads barcodes off a QR code, so the premise is false and
+    // the row stands: Odoo holds a unit on this order that no floor book saw.
+    const hit = res.variances.find((v) => v.barcode === canonicalize("SOFA-BBBBB"));
+    expect(hit).toBeDefined();
+    // Reported, not chased — one book has it and three do not, which is the
+    // weakest evidence shape there is.
+    expect(hit!.bucket).toBe("INFO");
   });
 });
 

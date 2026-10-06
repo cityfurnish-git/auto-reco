@@ -117,25 +117,26 @@ export function computeSuppressions(
         }
       }
 
-      // Silent OCR/SO-Match: barcode missing from physical, but the same SO or
-      // ticket appears under a DIFFERENT canonical in physical for the same
-      // product. Suppress silently — must never appear anywhere.
-      if (!v.P.present) {
-        const ids = [normalizeSO(v.soNumber), v.ticketId?.toUpperCase() ?? null];
-        for (const id of ids) {
-          if (!id) continue;
-          const matches = physIndex.get(id) ?? [];
-          if (
-            matches.some(
-              (m) => m.canonical !== v.canonical && productPrefixMatch(m.product, v.product)
-            )
-          ) {
-            suppressed.add(k);
-            silentOcr.add(k);
-            break;
-          }
-        }
-      }
+      // SILENT OCR/SO-MATCH — RETIRED 6 OCT 2026 (owner).
+      //
+      // It suppressed a unit missing from the guard book when the same sale
+      // order or ticket appeared there under a DIFFERENT barcode for the same
+      // product, on the assumption that a guard had mis-written the code. That
+      // held while the guard book was a photographed handwritten register.
+      //
+      // It does not hold now. The register is retired, so the only guard book
+      // left is Delhi's gate app, where the barcode is read from a QR code by a
+      // scanner. A scanner does not mis-write a barcode, so in the one city
+      // this could still fire, its premise is false — and what it would hide is
+      // a genuine mismatch between two units on the same order.
+      //
+      // It was also the only rule in the engine whose output was invisible by
+      // design: suppressed, never recorded, nowhere to audit. Removing it costs
+      // nothing on live data and removes a rule nobody could check.
+      //
+      // The set and its readers in run.ts are kept deliberately. They now never
+      // match, and leaving them is what makes bringing the rule back for a
+      // register city a one-block change rather than an archaeology exercise.
     }
   };
 

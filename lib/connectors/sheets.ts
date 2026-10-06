@@ -103,6 +103,41 @@ function str(v: unknown): string | undefined {
  * missing without a word anywhere. Now the caller can tell the two apart and
  * say so.
  */
+// A FAILED SHEETS CALL IS USUALLY A BLIP, AND A BLIP COSTS A WHOLE CITY-DAY.
+//
+// One throw here demotes the ops sheet to "did not report" for that city and
+// day, which is load-bearing: the engine then declines to blame the sheet for
+// anything missing, so the day grades with three books instead of four and the
+// run is saved as partial. Re-running 13-29 Sep twice on 5 Oct 2026 hit three
+// such failures (26 Sep, then 18 and 21 Sep), and all three succeeded on a
+// plain retry seconds later with no change to anything.
+//
+// Only transient shapes are retried. An auth failure, a missing spreadsheet or
+// a bad range is a real fault that retrying would merely delay reporting by a
+// couple of seconds, so those still throw on the first attempt.
+const TRANSIENT =
+  /ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|network|timeout|rate limit|quota exceeded|backend error|internal error|\b(429|500|502|503|504)\b/i;
+
+async function withSheetsRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  ctx?: { warn: (m: string) => void }
+): Promise<T> {
+  const delays = [400, 1200]; // three attempts in all, under two seconds total
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt >= delays.length || !TRANSIENT.test(msg)) throw err;
+      // Said out loud: a retry that no one can see turns a flaky dependency
+      // into a mystery, and the frequency is the evidence for fixing it.
+      ctx?.warn(`${label}: ${msg} — retrying (attempt ${attempt + 2} of ${delays.length + 1})`);
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+  }
+}
+
 export function findHeaderRowIndex(values: unknown[][]): number | null {
   for (let i = 0; i < Math.min(values.length, HEADER_SCAN_ROWS); i++) {
     const row = (values[i] ?? []).map((c) => String(c ?? "").trim().toLowerCase());
@@ -183,7 +218,7 @@ export const sheetsConnector: Connector = {
         let values: unknown[][];
         let displayed: unknown[][]; // same grid, FORMATTED (what ops actually see)
         try {
-          const [uRes, fRes] = await Promise.all([
+          const [uRes, fRes] = await withSheetsRetry(() => Promise.all([
             api.spreadsheets.values.get({
               spreadsheetId: entry.spreadsheetId,
               range: `${tab.name}!A1:Z`, // unbounded rows — API returns only rows with data
@@ -195,7 +230,7 @@ export const sheetsConnector: Connector = {
               range: `${tab.name}!A1:Z`,
               valueRenderOption: "FORMATTED_VALUE", // the displayed string, not the serial
             }),
-          ]);
+          ]), `${cityKey}/${tab.name}`, ctx);
           values = uRes.data.values ?? [];
           displayed = fRes.data.values ?? [];
         } catch (err) {
