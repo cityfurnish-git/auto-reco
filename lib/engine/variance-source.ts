@@ -23,6 +23,7 @@ const SOURCE_OF: Record<string, SourceLabel> = {
   [VARIANCE.PICKUP_ODOO_OPEN]: "Odoo",
   [VARIANCE.GATE_OPS_ODOO_NO_DT]: "Odoo",
   [VARIANCE.OPS_DT_ODOO_PENDING]: "Odoo",
+  [VARIANCE.ODOO_PAST_DEADLINE]: "Odoo",
   // Delivery Tracker scan issue
   [VARIANCE.WRONG_SCAN]: "DT",
   [VARIANCE.DT_ONLY]: "DT",

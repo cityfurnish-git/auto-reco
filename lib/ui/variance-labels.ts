@@ -417,6 +417,16 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
   // THREE BOOKS AGREE AND ONE DOES NOT. Tier 2, not tier 1: with three
   // independent records holding the unit, where it is was never in doubt —
   // what is missing is a line in the fourth book, and somebody owns writing it.
+  // Tier 2, not tier 3: unlike the other two "posted late" rows, this one is
+  // not "nothing to do" — the deadline was missed and that is the thing to fix.
+  // The unit is not at risk, so it is not tier 1 either.
+  [VARIANCE.ODOO_PAST_DEADLINE]: {
+    base: registerGap(
+      "Odoo posted past the deadline",
+      "The floor recorded this movement and Odoo does hold it — but the entry was posted after 3pm on the next open day, which is past the deadline the business works to.",
+      "Post Odoo entries the same day, or by 3pm the next working day."
+    ),
+  },
   [VARIANCE.SHEET_DT_ODOO_NO_GATE]: {
     base: registerGap(
       "Not in the gate log",

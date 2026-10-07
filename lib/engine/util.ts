@@ -106,6 +106,13 @@ export function blank(v: string | undefined | null): boolean {
 // Spare/Consumable INFO row, not a REAL "no trail" variance, even when the
 // barcode text itself doesn't say "spare". CONSUM matches the common
 // misspelling; REFURB+MAT avoids catching a refurbished rental *unit*.
+/** PO_INWARD is how every source's "PO inward" / vendor job type is normalised. */
+export function isVendorJob(jobType: string | null | undefined): boolean {
+  const j = (jobType ?? "").toUpperCase().replace(/[\s-]+/g, "_");
+  // Not every "PO_…": "PO Payment" is a money job, not a receipt.
+  return j === "PO_INWARD" || j.includes("VENDOR");
+}
+
 export function isSpareJobType(jobType: string | undefined | null): boolean {
   if (!jobType) return false;
   const s = jobType.toString().toUpperCase();

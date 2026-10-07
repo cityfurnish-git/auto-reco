@@ -108,6 +108,11 @@ export const VARIANCE_META: Record<string, VarianceMeta> = {
     responsible: "odoo_team",
     note: "The floor confirmed this movement for the day, and the Odoo entry does exist — it was just posted a day late (the 1-day buffer picked it up). No action; the entry is made.",
   },
+  [VARIANCE.ODOO_PAST_DEADLINE]: {
+    bucket: "REAL",
+    responsible: "odoo_team",
+    note: "The floor recorded this movement and Odoo did post it — but after the deadline (3pm on the next open day). The entry exists; what failed is the timeliness the business runs on.",
+  },
   [VARIANCE.SHEET_DT_ODOO_NO_GATE]: {
     bucket: "REAL",
     responsible: "warehouse_team",

@@ -30,7 +30,7 @@ const CONTEXTS: LabelContext[] = [
 ];
 
 describe("variance labels — coverage", () => {
-  it("covers all 28 canonical names exactly once", () => {
+  it("covers all 29 canonical names exactly once", () => {
     // The count is deliberately hard-coded rather than derived from VARIANCE:
     // a new name has to be a conscious edit here, which is what forces its
     // author to give it a label instead of letting it fall through to
@@ -38,8 +38,10 @@ describe("variance labels — coverage", () => {
     // 24th: ODOO_OUT_PENDING (2026-09-14). 25th: OT_CASE (2026-09-18).
     // 26th: ODD_HOUR_TRIP (2026-09-24). 27th and 28th: the two three-book
     // splits, SHEET_DT_ODOO_NO_GATE and GATE_DT_ODOO_NO_SHEET (2026-10-06).
-    expect(NAMES).toHaveLength(28);
-    expect(new Set(NAMES).size).toBe(28);
+    // 29th: ODOO_PAST_DEADLINE — a late posting that breached the deadline,
+    // split from the two "entry made late" names so the row says which it is.
+    expect(NAMES).toHaveLength(29);
+    expect(new Set(NAMES).size).toBe(29);
     expect(Object.keys(VARIANCE_LABELS).sort()).toEqual([...NAMES].sort());
   });
 

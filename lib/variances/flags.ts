@@ -26,6 +26,7 @@
 import { isCityClosed, type ClosureCalendar } from "../engine/schedule";
 import { addDays } from "../engine/dates";
 import { usesCalendarDay } from "../connectors/ist-window";
+import { isVendorJob } from "../engine/util";
 import type { City } from "../sample-data";
 
 export const FLAG = {
@@ -102,12 +103,10 @@ export function flagsFor(v: FlagInput, ctx: FlagContext): VarianceFlag[] {
   return out;
 }
 
-/** PO_INWARD is how every source's "PO inward" / vendor job type is normalised. */
-export function isVendorJob(jobType: string | null | undefined): boolean {
-  const j = (jobType ?? "").toUpperCase().replace(/[\s-]+/g, "_");
-  // Not every "PO_…": "PO Payment" is a money job, not a receipt.
-  return j === "PO_INWARD" || j.includes("VENDOR");
-}
+// Defined in lib/engine/util.ts and re-exported here: the ladder needs the same
+// test to decide whether a late Odoo posting is a breach or a vendor receipt
+// behaving normally, and two copies is how the two answers drift apart.
+export { isVendorJob } from "../engine/util";
 
 /** When Odoo's window for (city, day) shuts: 3pm IST on the next open day. */
 export function odooWindowEnd(city: string, day: string, cal: ClosureCalendar | null): number | null {

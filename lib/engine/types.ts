@@ -60,6 +60,10 @@ export type NormStatus =
   | "non_match"
   | "unknown";
 
+/** Odoo's own posting instant for this unit (sml.date), earliest if several.
+ *  Null when Odoo has no row, or carries no timestamp. */
+export type OdooPostedAt = number | null;
+
 export interface SourcePresence {
   present: boolean;
   count: number; // rows for this canonical in this source+direction
@@ -113,6 +117,8 @@ export interface BarcodeView {
   // evidence is a next-day posting is an "entry made late" INFO, never a REAL
   // "not posted in Odoo".
   odooNextDay: boolean;
+  /** Posting instant (ms). Drives the deadline test in run.ts. */
+  odooPostedAtMs?: OdooPostedAt;
   // REAL-eligibility gate for the Odoo-only rung (stamped in run.ts as a
   // composite): the Odoo record was CREATED (create_date) on the run date
   // itself, it is a CUSTOMER flow (sale order present, not an /INT/ internal

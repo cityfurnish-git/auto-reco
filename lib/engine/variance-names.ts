@@ -45,6 +45,14 @@ export const VARIANCE = {
    * GATE_DT_ODOO_NO_SHEET had no name at all: of the fifteen ways four books
    * can disagree, it was the only one the ladder answered with silence.
    */
+  /**
+   * Odoo posted the movement AFTER its deadline — 3pm on the next day the
+   * warehouse opens. Owner, 6 Oct 2026: a posting inside the grace period is
+   * the business working normally and stays INFO; past it, the policy was
+   * breached and somebody owns it. Split from the two "entry made late" names
+   * rather than re-bucketing them, so the row says which of the two it is.
+   */
+  ODOO_PAST_DEADLINE: "Odoo Entry Made Late — Past the Posting Deadline",
   SHEET_DT_ODOO_NO_GATE: "Sheet + DT + Odoo Confirm — Missing from Gate Register",
   GATE_DT_ODOO_NO_SHEET: "Gate + DT + Odoo Confirm — Missing from Ops Sheet",
 

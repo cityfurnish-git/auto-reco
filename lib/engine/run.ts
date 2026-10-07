@@ -18,9 +18,9 @@ import { detectDirectionConflicts } from "./direction-conflict";
 import { classify, duplicateHit } from "./ladder";
 import { filterOdooWindow } from "./odoo-window";
 import { utcToIstDate } from "../connectors/ist-window";
-import { isCityClosed, type ClosureCalendar } from "./schedule";
+import { isCityClosed, odooDeadlineMs, type ClosureCalendar } from "./schedule";
 import { computeSuppressions } from "./suppressions";
-import { isSpareJobType, normalizeJobType, normalizeStatus } from "./util";
+import { isSpareJobType, isVendorJob, normalizeJobType, normalizeStatus } from "./util";
 import { grammarSuspect, isSummaryLine } from "./ocr-noise";
 import { bestGuardMatch } from "./fuzzy";
 import {
@@ -419,9 +419,19 @@ export function runReconciliation(
   // leg masquerade as a customer flow. Computed from the RAW rows because the
   // display-only DT enrichment below overwrites ticket/job fields on the views.
   const odooCustomerDirCanon = new Set<string>();
+  // EARLIEST posting wins. A unit posted twice has met the deadline if either
+  // entry did; blaming it for the later of two would report a correction as a
+  // breach.
+  const odooPostedAt = new Map<string, number>();
   for (const r of odooWindowed) {
     const posted = parseDate(r.createdOn) ?? parseDate(r.date);
     const dirKey = `${r.direction}::${canonicalize(r.barcode)}`;
+    // movementDate is the raw sml.date — the only Odoo field carrying a CLOCK.
+    // createdOn is a date, derived from it, and cannot answer "before 3pm".
+    const at = r.movementDate ? Date.parse(String(r.movementDate)) : NaN;
+    if (!Number.isNaN(at) && (!odooPostedAt.has(dirKey) || at < odooPostedAt.get(dirKey)!)) {
+      odooPostedAt.set(dirKey, at);
+    }
     if (posted === runDate) odooSameDayCanon.add(dirKey);
     else if (posted === nextDay) odooNextDayCanon.add(dirKey);
     if (parseDate(r.recordCreatedOn) === runDate) odooCreatedTodayCanon.add(dirKey);
@@ -471,11 +481,13 @@ export function runReconciliation(
     v.odooSameDay = odooSameDayCanon.has(`IN::${v.canonical}`);
     v.odooNextDay = odooNextDayCanon.has(`IN::${v.canonical}`);
     v.odooCreatedToday = createdTodayFlag(v.canonical, "IN");
+    v.odooPostedAtMs = odooPostedAt.get(`IN::${v.canonical}`) ?? null;
   }
   for (const v of Array.from(outViews.values())) {
     v.odooSameDay = odooSameDayCanon.has(`OUT::${v.canonical}`);
     v.odooNextDay = odooNextDayCanon.has(`OUT::${v.canonical}`);
     v.odooCreatedToday = createdTodayFlag(v.canonical, "OUT");
+    v.odooPostedAtMs = odooPostedAt.get(`OUT::${v.canonical}`) ?? null;
   }
 
   // Section 7 — suppressions (before classification).
@@ -834,19 +846,58 @@ export function runReconciliation(
         const inTransit = !postedLate && odooBlamed && direction === "OUT" && !v.O.present
           && (v.P.present || v.D.present) && pendingOdooOut.has(v.canonical);
 
-        const name = postedLate
+        const baseName = postedLate
           ? VARIANCE.ODOO_POSTED_LATE
           : inTransit
             ? VARIANCE.ODOO_OUT_PENDING
             : echo
               ? VARIANCE.ADJACENT_DAY
               : hit.variance_name;
+
+        // LATE, OR PAST THE DEADLINE? (owner, 6 Oct 2026.) The two "entry made
+        // late" names cover a posting that arrived after the goods moved, which
+        // is the business working normally while Odoo catches up. Past 3pm on
+        // the next OPEN day it stops being catching up and becomes a breach of
+        // the deadline ops actually work to, so it is chased.
+        //
+        // Needs the posting CLOCK, which only sml.date carries (odooPostedAtMs).
+        // Without one we cannot prove a breach, so we do not claim one — the row
+        // keeps its INFO name. Measured 13-29 Sep: of 1,942 "entry made late"
+        // rows, 728 breached (43/day), 744 were inside the deadline, and 470
+        // could not be matched to a posting and stay as they were.
+        //
+        // TWO WAYS TO KNOW, because the two names are evidenced differently.
+        // ODOO_POSTED_NEXT_DAY has the posting inside the ±1 pull window, so the
+        // view carries its clock and we compare it. ODOO_POSTED_LATE fires when
+        // Odoo is ABSENT from this day's view and the posting sits days away —
+        // there is no clock on the view to read, but a posting days later is
+        // past a next-open-day deadline by construction, so no clock is needed.
+        //
+        // VENDOR RECEIPTS ARE CARVED OUT, and this is the one that would have
+        // been wrong. Measured 2026-08-10: EVERY ONE of 162 "PO Inward" rows had
+        // its Odoo receipt posted +2 or +3 days later, because serials are born
+        // in Odoo at receipt and the paperwork follows the truck. Promoting
+        // those would chase vendor receipts for behaving exactly as vendor
+        // receipts always behave — and the owner asked for a gate entry per
+        // vendor item (6 Oct), not for the posting delay to be chased.
+        const vendorFlow = isVendorJob(v.jobType);
+        const deadlineBreached =
+          !vendorFlow &&
+          ((baseName === VARIANCE.ODOO_POSTED_NEXT_DAY &&
+            v.odooPostedAtMs != null &&
+            v.odooPostedAtMs > odooDeadlineMs(city, runDate, calendar ?? null)) ||
+            baseName === VARIANCE.ODOO_POSTED_LATE);
+        const name = deadlineBreached ? VARIANCE.ODOO_PAST_DEADLINE : baseName;
         variances.push(
           applyBucket({
             ...baseRow(v),
             direction,
             variance_name: name,
-            priority: postedLate || inTransit || echo ? "Info" : hit.priority,
+            priority: deadlineBreached
+              ? "High"
+              : postedLate || inTransit || echo
+                ? "Info"
+                : hit.priority,
           })
         );
         if (postedLate) latePostings++;

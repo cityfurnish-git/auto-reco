@@ -8,6 +8,7 @@
 // Pure and client-safe (no env, no db): server routes, the engine and the
 // browser dashboards all derive OFF from the same (city, business_date) rule.
 
+import { addDays } from "./dates";
 import type { City } from "../sample-data";
 
 // JS Date#getUTCDay(): 0=Sun, 1=Mon, … 4=Thu, … 6=Sat.
@@ -61,6 +62,25 @@ function weekdayOf(businessDate: string): number | null {
  * pure, zero-argument form the engine and the browser already call in a dozen
  * places; this is the same question asked with better information.
  */
+/**
+ * When Odoo's posting deadline for (city, day) falls: 3pm IST on the next day
+ * that warehouse opens, skipping its weekly offs and holidays.
+ *
+ * ONE DEFINITION, TWO READERS. lib/variances/flags.ts uses it to decide whether
+ * a row still carries the ODOO PENDING label, and the engine uses it to decide
+ * whether a late posting breached policy. They were always meant to agree, and
+ * two copies of a date rule is how they stop agreeing.
+ */
+export function odooDeadlineMs(
+  city: City,
+  day: string,
+  cal: ClosureCalendar | null
+): number {
+  let d = addDays(day, 1);
+  for (let i = 0; i < 7 && isCityClosed(city, d, cal); i++) d = addDays(d, 1);
+  return Date.parse(`${d}T15:00:00+05:30`);
+}
+
 export function isCityClosed(
   city: City,
   businessDate: string,
