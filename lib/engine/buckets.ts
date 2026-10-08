@@ -108,6 +108,11 @@ export const VARIANCE_META: Record<string, VarianceMeta> = {
     responsible: "odoo_team",
     note: "The floor confirmed this movement for the day, and the Odoo entry does exist — it was just posted a day late (the 1-day buffer picked it up). No action; the entry is made.",
   },
+  [VARIANCE.BARCODE_OVERDUE]: {
+    bucket: "REAL",
+    responsible: "warehouse_team",
+    note: "This item was received at the gate without a barcode and still has none after 24 hours. Until a barcode exists the unit cannot be matched to any system — assign it and scan it against the gate entry.",
+  },
   [VARIANCE.ODOO_PAST_DEADLINE]: {
     bucket: "REAL",
     responsible: "odoo_team",

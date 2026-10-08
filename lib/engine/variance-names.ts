@@ -53,6 +53,13 @@ export const VARIANCE = {
    * rather than re-bucketing them, so the row says which of the two it is.
    */
   ODOO_PAST_DEADLINE: "Odoo Entry Made Late — Past the Posting Deadline",
+  /**
+   * An item logged at the gate with no barcode, still unassigned 24 hours
+   * later. Owner, 6 Oct 2026. Raised per GATE ENTRY, not per canonical barcode
+   * — there is no barcode yet, which is the finding — so like ODD_HOUR_TRIP it
+   * comes from outside the ladder and the stale pass skips it.
+   */
+  BARCODE_OVERDUE: "Received Without a Barcode — Not Assigned Within 24 Hours",
   SHEET_DT_ODOO_NO_GATE: "Sheet + DT + Odoo Confirm — Missing from Gate Register",
   GATE_DT_ODOO_NO_SHEET: "Gate + DT + Odoo Confirm — Missing from Ops Sheet",
 

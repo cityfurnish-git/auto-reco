@@ -39,6 +39,7 @@ const PHRASE: Record<string, string> = {
   "Same Unit In + Out Today — Confirm Replacement": "Same unit in and out · Confirm replacement",
   "Failed Delivery — Return Not Logged Inward": "Failed delivery · Return not logged inward",
   "Odoo Entry Made Late — Past the Posting Deadline": "Odoo posted late · past the deadline",
+  "Received Without a Barcode — Not Assigned Within 24 Hours": "Received untagged · no barcode after 24h",
   "Sheet + DT + Odoo Confirm — Missing from Gate Register": "Three books have it · no gate log line",
   "Gate + DT + Odoo Confirm — Missing from Ops Sheet": "Three books have it · no ops sheet line",
   "ODD HOUR TRIP — Movement at a Time the Gate Rarely Sees": `Odd hour · Trip at a time the gate rarely sees`,

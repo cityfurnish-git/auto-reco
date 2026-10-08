@@ -420,6 +420,17 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
   // Tier 2, not tier 3: unlike the other two "posted late" rows, this one is
   // not "nothing to do" — the deadline was missed and that is the thing to fix.
   // The unit is not at risk, so it is not tier 1 either.
+  // Tier 1. Not "a record needs fixing": until the sticker exists the unit is
+  // not findable by any system at all, so where it is genuinely cannot be
+  // answered — which is exactly what tier 1 means.
+  [VARIANCE.BARCODE_OVERDUE]: {
+    base: {
+      display: "No barcode after 24 hours",
+      tier: 1,
+      risk: "This item was received without a barcode and still has none, so it cannot be matched to any order, delivery or stock record — it is on the floor and invisible to every system.",
+      action: "Assign the barcode and scan it against the gate entry.",
+    },
+  },
   [VARIANCE.ODOO_PAST_DEADLINE]: {
     base: registerGap(
       "Odoo posted past the deadline",

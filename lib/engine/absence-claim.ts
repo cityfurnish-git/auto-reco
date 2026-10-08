@@ -53,6 +53,9 @@ export const ABSENCE_CLAIM: Record<string, readonly SourceKey[]> = {
   [VARIANCE.ODOO_ONLY_TODAY]: ["P", "S", "D"],
   // Odoo HOLDS the unit; the failure is when it was posted, not whether.
   [VARIANCE.ODOO_PAST_DEADLINE]: [],
+  // Nothing is ABSENT: the unit has no barcode to be absent under, which is
+  // the finding. Re-testing presence would answer a different question.
+  [VARIANCE.BARCODE_OVERDUE]: [],
   [VARIANCE.SHEET_DT_ODOO_NO_GATE]: ["P"],
   [VARIANCE.GATE_DT_ODOO_NO_SHEET]: ["S"],
 

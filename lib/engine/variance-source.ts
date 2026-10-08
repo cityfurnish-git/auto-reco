@@ -36,6 +36,7 @@ const SOURCE_OF: Record<string, SourceLabel> = {
   [VARIANCE.SHEET_NOT_DONE_BUT_POSTED]: "Cross",
   // Physical / gate register
   [VARIANCE.GATE_ONLY]: "Physical",
+  [VARIANCE.BARCODE_OVERDUE]: "Physical",
   [VARIANCE.OPS_ODOO_NO_GATE]: "Physical",
   [VARIANCE.SHEET_DT_ODOO_NO_GATE]: "Physical",
   [VARIANCE.GATE_ODOO_NO_OPS_DT]: "Physical",

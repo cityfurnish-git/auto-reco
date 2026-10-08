@@ -730,6 +730,9 @@ export async function resolveStaleOpenVariances(
       // (lib/reconcile/odd-hour-trips.ts) and re-upserts its own rows every
       // run; without this skip the stale pass would retire them minutes later.
       if (row.variance_name === VARIANCE.ODD_HOUR_TRIP) continue;
+      // Same reasoning: raised from gate_scans after the engine
+      // (lib/reconcile/barcode-sla.ts), re-upserted every run.
+      if (row.variance_name === VARIANCE.BARCODE_OVERDUE) continue;
       const key = `${row.direction}::${row.barcode}::${row.variance_name}`;
       if (emittedKeys.has(key)) continue; // still current — upsert refreshed it
       const unit = `${row.direction}::${row.barcode}`;

@@ -18,6 +18,7 @@ import { carryForwardFrozenDt } from "./freeze";
 import type { ClosureCalendar } from "../engine/schedule";
 import { readStoredClosureCalendar } from "../db/persist";
 import { raiseOddHourTrips } from "./odd-hour-trips";
+import { raiseBarcodeOverdue } from "./barcode-sla";
 import { fetchOdooPendingOut, fetchOdooPostingsAfter } from "../connectors/odoo";
 import { processPendingGuardUploads } from "../connectors/ocr/process";
 import { readWarehouseCalendar } from "../connectors/warehouse-calendar";
@@ -308,6 +309,11 @@ export async function runReconcilePipeline(
     //       trip, from the gate's own times. After the stale pass, which skips
     //       this name because the ladder never emits it.
     await raiseOddHourTrips(db, runId, runDate, pipelineWarnings).catch(() => 0);
+
+    // 4b-3. Items received untagged and still unassigned past the 24-hour
+    //       deadline. Also after the stale pass, and skipped by it for the
+    //       same reason: the ladder never emits this name.
+    await raiseBarcodeOverdue(db, runId, runDate, pipelineWarnings).catch(() => 0);
 
     // 4c. Per-city rollup for the leaderboard (movements + REAL count per city).
     await saveCityStats(db, runId, runDate, run.perCity, reportedByCity);
