@@ -16,7 +16,7 @@
 // Requires: DT_MONGODB_URI (full connection string), DT_MONGODB_DB (default
 // "cityfurnish"). Node runtime only (uses the `mongodb` driver).
 
-import { MongoClient } from "mongodb";
+import { dtTransport } from "./dt-transport";
 import type { Connector, CityTaggedRow } from "./types";
 import { normalizeCity } from "./types";
 import { dayToUtcWindow, istDayToUtcWindow, usesCalendarDay } from "./ist-window";
@@ -62,10 +62,11 @@ export const dtConnector: Connector = {
   source: "DT",
   label: "Delivery Tracker",
   async pull(runDate: string): Promise<CityTaggedRow[]> {
-    const uri = process.env.DT_MONGODB_URI;
-    if (!uri) throw new Error("DT not configured (set DT_MONGODB_URI).");
-
-    const dbName = process.env.DT_MONGODB_DB ?? "cityfurnish";
+    // WHICH ROAD INTO THE TRACKER — see dt-transport.ts. Metabase by default
+    // since 13 Oct 2026, because the direct MongoDB connection has been blocked
+    // by an IP allow-list since 2 October; DT_TRANSPORT=mongo switches back.
+    // Everything below is unchanged by the choice: the pipelines are the same
+    // pipelines, and the transport is only how they are posted.
     // WHICH DAY A DELIVERY TASK BELONGS TO — two answers, by date.
     //
     // FROM 13 Sep 2026 the task is placed on the day it was SCHEDULED for
@@ -99,10 +100,8 @@ export const dtConnector: Connector = {
       ? new Date(schedule.endUtcExclusive)
       : new Date(Date.parse(endUtcExclusive) + 86_400_000);
 
-    const client = new MongoClient(uri);
+    const dt = dtTransport();
     try {
-      await client.connect();
-      const db = client.db(dbName);
 
       // A JOB THAT WAS ATTEMPTED ON THIS DAY, WHATEVER ITS SCHEDULE SAYS NOW.
       //
@@ -124,9 +123,9 @@ export const dtConnector: Connector = {
       let attemptedIds: unknown[] = [];
       if (byScheduledDate) {
         try {
-          attemptedIds = await db
-            .collection(DT_TRIPS_COLLECTION)
-            .distinct("deliveryId", { scheduledDate: { $gte: scanStart, $lt: scanEnd } });
+          attemptedIds = await dt.distinctIds(DT_TRIPS_COLLECTION, "deliveryId", {
+            scheduledDate: { $gte: scanStart, $lt: scanEnd },
+          });
         } catch {
           // A missing/renamed trips collection must never cost the whole pull:
           // without it this is exactly the previous behaviour.
@@ -268,9 +267,7 @@ export const dtConnector: Connector = {
       ];
 
       const rows: CityTaggedRow[] = [];
-      const cursor = db.collection(DT_PARENT_COLLECTION).aggregate(pipeline);
-      for await (const raw of cursor) {
-        const doc = raw as Record<string, unknown>;
+      for (const doc of await dt.aggregate(DT_PARENT_COLLECTION, pipeline)) {
 
         const city = normalizeCity(doc.city);
         const barcode = str(doc.barcode);
@@ -317,7 +314,7 @@ export const dtConnector: Connector = {
       }
       return rows;
     } finally {
-      await client.close();
+      await dt.close();
     }
   },
 };
