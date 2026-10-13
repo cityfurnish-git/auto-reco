@@ -1,21 +1,31 @@
-"use client";
-
 // Section 3 — do the books agree? Each book in turn as the source of truth.
 //
 // Owner's design, 18 Sep 2026, after deciding that no single book is the
 // anchor and all four are cross-verified. Four cards, one per book: of the
-// units THAT book has, how many all four agree on, and how many each of the
-// other three matches or misses — inward and outward apart, because they are
-// different movements with different books behind them.
+// units THAT book has, how many all four agree on.
 //
 // Units, not rows, from the movement ledger — one per barcode per direction.
 // Odoo is counted on its own 3pm window, the same rule as the source table in
 // section 2, so each card's "has" figure ties to that table.
+//
+// SHORTENED 13 OCT 2026 (owner). Each card used to carry eight split bars — all
+// four agree, then one pairing against each of the other three books, inward and
+// outward apart — plus a legend. Four of those side by side was the densest
+// thing on the page, and the detail was being read before the headline it was
+// meant to support. The card now answers one question, "how many of this book's
+// units does everything else agree on", and the eight numbers move inside the
+// modal, where there is room for them and where the units themselves are.
+//
+// The direction split moves with them: it is the modal's one filter, so the
+// card is a single figure for the whole day rather than two half-figures a
+// reader has to add up.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/modal";
+import { Icon } from "@/components/icon";
 import { ErrorState } from "@/components/error-state";
 import { SOURCE_NAME } from "@/lib/ui/source-names";
+import { downloadTable, type CsvColumn } from "@/lib/ui/csv-download";
 import type { CityAgg, TruthSource } from "@/lib/hooks/use-dashboard-data";
 
 const BOOKS: TruthSource[] = ["gate", "sheet", "dt", "odoo"];
@@ -23,12 +33,14 @@ const NAME: Record<TruthSource, string> = {
   gate: SOURCE_NAME.gate, sheet: SOURCE_NAME.sheet, dt: SOURCE_NAME.dt, odoo: SOURCE_NAME.odoo,
 };
 type Dir = "IN" | "OUT";
+/** The modal's one filter. BOTH is the default so it opens on the card's own figure. */
+type DirFilter = "BOTH" | Dir;
+const DIRS: Dir[] = ["IN", "OUT"];
+const dirsOf = (f: DirFilter): Dir[] => (f === "BOTH" ? DIRS : [f]);
 
-/** What was clicked: which book is the truth, and which slice of its units. */
-interface Pick {
-  truth: TruthSource;
-  direction: Dir;
-  kind: "all" | "allMatched" | "notAll" | "matched" | "notMatched";
+/** Which slice of a book's units the modal's table is showing. */
+interface Slice {
+  kind: "all" | "allMatched" | "notAll" | "notMatched";
   vs?: TruthSource;
   label: string;
 }
@@ -39,130 +51,54 @@ export default function SourceTruthCards({ agg, city, loading, businessDate }: {
   loading: boolean;
   businessDate?: string;
 }) {
-  const [pick, setPick] = useState<Pick | null>(null);
+  const [open, setOpen] = useState<TruthSource | null>(null);
   const t = agg?.truth;
 
   return (
     <>
-      {/* Redrawn 18 Sep 2026 ("cleaner, or try a visual"): the table of
-          matched · not matched pairs read as a wall of numbers. Each line is
-          now one bar — green the units the other book also has, red the ones
-          it lacks — so the weak pairing is visible before a figure is read. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {BOOKS.map((book) => {
           const c = t?.[book];
-          const others = BOOKS.filter((o) => o !== book);
-          const open = (p: Omit<Pick, "truth">) => businessDate && setPick({ truth: book, ...p });
-          const side = (d: Dir) => (d === "IN" ? "inward" : "outward");
+          const saw = (c?.IN.saw ?? 0) + (c?.OUT.saw ?? 0);
+          const ok = (c?.IN.allMatched ?? 0) + (c?.OUT.allMatched ?? 0);
+          const pct = saw ? Math.round((ok / saw) * 100) : null;
           return (
-            <div key={book} className="card p-4 flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wider text-text-muted">Source of truth</p>
-                  <h4 className="font-headline text-base text-text-primary truncate">{NAME[book]}</h4>
-                </div>
-                <div className="flex gap-3 text-right shrink-0">
-                  {(["IN", "OUT"] as Dir[]).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      disabled={loading || !c?.[d].saw}
-                      onClick={() => open({ direction: d, kind: "all", label: `${NAME[book]} · ${side(d)}` })}
-                      className="rounded-control px-1.5 hover:bg-surface-elevated disabled:hover:bg-transparent cursor-pointer disabled:cursor-default"
-                      title={`Every ${side(d)} unit ${NAME[book]} has`}
-                    >
-                      <span className="block text-lg font-bold tabular-nums text-text-primary leading-tight">
-                        {loading ? "…" : c?.[d].saw ?? 0}
-                      </span>
-                      <span className="block text-[11px] text-text-muted">{d === "IN" ? "In" : "Out"}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <Group title="All four agree">
-                {(["IN", "OUT"] as Dir[]).map((d) => {
-                  const saw = c?.[d].saw ?? 0;
-                  const ok = c?.[d].allMatched ?? 0;
-                  return (
-                    <Bar key={d} dir={d} loading={loading} ok={ok} bad={Math.max(0, saw - ok)}
-                      onOk={() => open({ direction: d, kind: "allMatched", label: `${NAME[book]} · all four agree · ${side(d)}` })}
-                      onBad={() => open({ direction: d, kind: "notAll", label: `${NAME[book]} has, at least one other book does not · ${side(d)}` })} />
-                  );
-                })}
-              </Group>
-
-              {others.map((o) => (
-                <Group key={o} title={`vs ${NAME[o]}`}>
-                  {(["IN", "OUT"] as Dir[]).map((d) => {
-                    const v = c?.[d].vs[o];
-                    return (
-                      <Bar key={d} dir={d} loading={loading} ok={v?.matched ?? 0} bad={v?.notMatched ?? 0}
-                        onOk={() => open({ direction: d, kind: "matched", vs: o, label: `${NAME[book]} and ${NAME[o]} both have · ${side(d)}` })}
-                        onBad={() => open({ direction: d, kind: "notMatched", vs: o, label: `${NAME[book]} has, ${NAME[o]} does not · ${side(d)}` })} />
-                    );
-                  })}
-                </Group>
-              ))}
-
-              <p className="flex items-center gap-3 text-[11px] text-text-muted pt-1 border-t border-border">
-                <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-success" /> matched</span>
-                <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm bg-danger" /> not matched</span>
-                <span className="ml-auto">click a bar to see units</span>
+            <button
+              key={book}
+              type="button"
+              disabled={loading || !saw || !businessDate}
+              onClick={() => setOpen(book)}
+              title={saw ? `Open every ${NAME[book]} unit for the day` : "This book recorded nothing for the day"}
+              className="card p-4 text-left flex flex-col gap-2 hover:bg-surface-elevated transition-colors duration-150 disabled:hover:bg-surface-card cursor-pointer disabled:cursor-default"
+            >
+              <p className="text-[11px] uppercase tracking-wider text-text-muted">{NAME[book]}</p>
+              {/* THE ONE FIGURE: of what this book has, how much everything
+                  else agrees on. An em dash, never a zero, when the book did
+                  not report — those mean opposite things. */}
+              <p className="text-2xl font-bold tabular-nums text-text-primary leading-none">
+                {loading ? "…" : saw ? ok : "—"}
+                {!loading && !!saw && (
+                  <span className="text-base font-normal text-text-muted"> of {saw}</span>
+                )}
               </p>
-            </div>
+              <p className="text-xs text-text-secondary">
+                {loading ? " " : saw ? "all four agree" : "nothing recorded"}
+              </p>
+              {!loading && !!saw && (
+                <div className="flex h-1.5 rounded-full overflow-hidden bg-surface-elevated" aria-hidden="true">
+                  <i className="bg-success" style={{ width: `${pct}%` }} />
+                  <i className="bg-danger grow" />
+                </div>
+              )}
+            </button>
           );
         })}
       </div>
-      {pick && businessDate && (
-        <TruthModal pick={pick} date={businessDate} city={city} onClose={() => setPick(null)} />
+      {open && businessDate && (
+        <TruthModal book={open} date={businessDate} city={city}
+          counts={t?.[open]} onClose={() => setOpen(null)} />
       )}
     </>
-  );
-}
-
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <p className="text-xs font-medium text-text-secondary">{title}</p>
-      {children}
-    </div>
-  );
-}
-
-/**
- * One direction's split: green = matched, red = not matched, widths in
- * proportion. Each half is its own button; an empty half opens nothing.
- * The figures sit beside the bar so it never has to be read by eye alone.
- */
-function Bar({ dir, ok, bad, onOk, onBad, loading }: {
-  dir: Dir; ok: number; bad: number; onOk: () => void; onBad: () => void; loading: boolean;
-}) {
-  const total = ok + bad;
-  const pct = total ? Math.round((ok / total) * 100) : 0;
-  return (
-    <div className="grid grid-cols-[28px_1fr_auto] items-center gap-2 text-xs">
-      <span className="text-text-muted">{dir === "IN" ? "In" : "Out"}</span>
-      <div className="flex h-3 rounded-full overflow-hidden bg-surface-elevated" title={total ? `${pct}% matched` : "Nothing to compare"}>
-        {!loading && ok > 0 && (
-          <button type="button" onClick={onOk} style={{ width: `${(ok / total) * 100}%` }}
-            className="bg-success hover:opacity-80 cursor-pointer" aria-label={`${ok} matched`} />
-        )}
-        {!loading && bad > 0 && (
-          <button type="button" onClick={onBad} style={{ width: `${(bad / total) * 100}%` }}
-            className="bg-danger hover:opacity-80 cursor-pointer" aria-label={`${bad} not matched`} />
-        )}
-      </div>
-      <span className="tabular-nums whitespace-nowrap text-right min-w-[64px]">
-        {loading ? "…" : (
-          <>
-            <button type="button" disabled={!ok} onClick={onOk} className="text-success hover:underline disabled:no-underline cursor-pointer disabled:cursor-default">{ok}</button>
-            <span className="text-text-muted"> · </span>
-            <button type="button" disabled={!bad} onClick={onBad} className={`${bad ? "text-danger font-semibold" : "text-text-muted"} hover:underline disabled:no-underline cursor-pointer disabled:cursor-default`}>{bad}</button>
-          </>
-        )}
-      </span>
-    </div>
   );
 }
 
@@ -177,65 +113,175 @@ interface Row {
   seenBy: string;
 }
 
-function TruthModal({ pick, date, city, onClose }: { pick: Pick; date: string; city: string; onClose: () => void }) {
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [capped, setCapped] = useState(false);
+const COLUMNS: CsvColumn<Row>[] = [
+  { label: "Barcode", of: (r) => r.barcodeDisplay },
+  { label: "Direction", of: (r) => (r.direction === "IN" ? "Inward" : "Outward") },
+  { label: "Product", of: (r) => r.product },
+  { label: "Customer", of: (r) => r.customer },
+  { label: "SO", of: (r) => r.soNumber },
+  { label: "Ticket", of: (r) => r.ticketId },
+  { label: "Job type", of: (r) => r.jobType },
+  { label: "Seen by", of: (r) => r.seenBy },
+];
 
+function TruthModal({ book, date, city, counts, onClose }: {
+  book: TruthSource;
+  date: string;
+  city: string;
+  counts?: CityAgg["truth"][TruthSource];
+  onClose: () => void;
+}) {
+  const [dir, setDir] = useState<DirFilter>("BOTH");
+  const [slice, setSlice] = useState<Slice>({ kind: "all", label: "Everything this book has" });
+  // KEYED TO THE REQUEST, not reset on the way in. Clearing the table at the
+  // top of the effect is a synchronous setState during render's commit; holding
+  // the answer with the question it answers gets the same empty-while-loading
+  // behaviour from what is already on screen, and a late reply for a filter the
+  // reader has moved on from can never paint.
+  const [answer, setAnswer] = useState<{ key: string; rows: Row[]; capped: boolean } | null>(null);
+  const [failed, setFailed] = useState<{ key: string; message: string } | null>(null);
+
+  const others = BOOKS.filter((o) => o !== book);
+  /** Sum a figure across whichever directions the filter admits. */
+  const sum = (pick: (c: NonNullable<typeof counts>[Dir]) => number) =>
+    dirsOf(dir).reduce((n, d) => n + (counts ? pick(counts[d]) : 0), 0);
+
+  const saw = sum((c) => c.saw);
+  const allOk = sum((c) => c.allMatched);
+
+  const slices: (Slice & { count: number })[] = useMemo(() => [
+    { kind: "all", label: "Everything this book has", count: saw },
+    { kind: "allMatched", label: "All four agree", count: allOk },
+    { kind: "notAll", label: "At least one book is missing it", count: Math.max(0, saw - allOk) },
+    ...others.map((o) => ({
+      kind: "notMatched" as const,
+      vs: o,
+      label: `${NAME[o]} does not have it`,
+      count: sum((c) => c.vs[o]?.notMatched ?? 0),
+    })),
+  ], [saw, allOk, dir, book]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const key = [book, slice.kind, slice.vs ?? "", dir, date, city].join("|");
+
+  // One request per direction the filter admits, so BOTH shows the same units
+  // the card counted. Two small reads beat a second API shape for one toggle.
   useEffect(() => {
     let alive = true;
-    const q = new URLSearchParams({ truth: pick.truth, kind: pick.kind, direction: pick.direction, date });
-    if (pick.vs) q.set("vs", pick.vs);
-    if (city !== "ALL") q.set("city", city);
-    fetch(`/api/anchored?${q}`, { credentials: "same-origin" })
-      .then((r) => r.json())
-      .then((j) => {
+    Promise.all(dirsOf(dir).map((d) => {
+      const q = new URLSearchParams({ truth: book, kind: slice.kind, direction: d, date });
+      if (slice.vs) q.set("vs", slice.vs);
+      if (city !== "ALL") q.set("city", city);
+      return fetch(`/api/anchored?${q}`, { credentials: "same-origin" }).then((r) => r.json());
+    }))
+      .then((results) => {
         if (!alive) return;
-        if (j.error) setError(String(j.error));
-        else { setRows(j.rows ?? []); setCapped(!!j.capped); }
+        const bad = results.find((j) => j.error);
+        if (bad) { setFailed({ key, message: String(bad.error) }); return; }
+        setAnswer({
+          key,
+          rows: results.flatMap((j) => (j.rows ?? []) as Row[]),
+          capped: results.some((j) => j.capped),
+        });
       })
-      .catch(() => { if (alive) setError("Could not reach the server."); });
+      .catch(() => { if (alive) setFailed({ key, message: "Could not reach the server." }); });
     return () => { alive = false; };
-  }, [pick, date, city]);
+  }, [key, book, slice, dir, date, city]);
+
+  const rows = answer?.key === key ? answer.rows : null;
+  const capped = answer?.key === key ? answer.capped : false;
+  const error = failed?.key === key ? failed.message : null;
+
+  const sideLabel = dir === "BOTH" ? "inward and outward" : dir === "IN" ? "inward" : "outward";
 
   return (
-    <Modal open onClose={onClose} size="xl" icon="fact_check" title={`${pick.label} · ${date}`}
+    <Modal open onClose={onClose} size="xl" icon="fact_check"
+      title={`${NAME[book]} as the source of truth · ${date}`}
       subtitle="One row per unit. 'Seen by' names every book that has it — the others do not.">
+
+      {/* THE ONE FILTER (owner, 13 Oct 2026). Inward and outward are different
+          movements with different books behind them, so the split is worth a
+          control; everything else that used to be a control is a row below. */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <span className="text-[11px] uppercase tracking-wider text-text-muted">Direction</span>
+        <div className="flex rounded-control border border-border overflow-hidden">
+          {([["BOTH", "Both"], ["IN", "Inward"], ["OUT", "Outward"]] as [DirFilter, string][]).map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setDir(v)}
+              className={`px-3 h-8 text-sm cursor-pointer ${dir === v ? "bg-accent text-white" : "hover:bg-surface-elevated"}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="btn btn-compact btn-secondary ml-auto"
+          disabled={!rows || rows.length === 0}
+          onClick={() => rows && exportSlice(rows, book, slice, dir, date, city)}>
+          <Icon name="download" size={15} /> Export
+        </button>
+      </div>
+
+      {/* The eight figures the card used to carry. Each one picks the table. */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {slices.map((s) => {
+          const on = s.kind === slice.kind && s.vs === slice.vs;
+          return (
+            <button key={`${s.kind}:${s.vs ?? ""}`} type="button"
+              onClick={() => setSlice({ kind: s.kind, vs: s.vs, label: s.label })}
+              className={`rounded-pill border px-3 h-8 text-sm whitespace-nowrap cursor-pointer ${
+                on ? "border-accent bg-accent-soft text-accent font-semibold" : "border-border hover:bg-surface-elevated"
+              }`}>
+              {s.label}
+              <span className="tabular-nums text-text-muted font-normal"> · {s.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="text-sm text-text-muted mb-3">
+        {slice.label} · {sideLabel}
+        {rows && <> · <span className="tabular-nums">{rows.length}</span> unit{rows.length === 1 ? "" : "s"}</>}
+        {capped && <span className="text-status-warning"> · showing the first 1,000 of each direction only</span>}
+      </p>
+
       {error && <ErrorState what="these units" detail={error} onRetry={() => location.reload()} compact />}
       {!rows && !error && <p className="text-sm text-text-muted">Loading…</p>}
       {rows && rows.length === 0 && <p className="text-sm text-text-muted">Nothing in this group for the day.</p>}
       {rows && rows.length > 0 && (
-        <>
-          <p className="text-sm text-text-muted mb-3">
-            {rows.length} unit{rows.length === 1 ? "" : "s"}
-            {capped && <span className="text-status-warning"> · showing the first 1,000 only</span>}
-          </p>
-          <div className="overflow-x-auto border border-border rounded-control">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-surface-elevated">
-                <tr>
-                  {["Barcode", "Product", "Customer", "SO", "Ticket", "Job type", "Seen by"].map((h) => (
-                    <th key={h} className="text-left px-3 py-2 border border-border text-xs uppercase tracking-wide text-text-muted whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={`${r.barcodeDisplay}-${i}`} className="hover:bg-surface-elevated">
-                    <td className="px-3 py-1.5 border border-border font-mono whitespace-nowrap">{r.barcodeDisplay}</td>
-                    <td className="px-3 py-1.5 border border-border">{r.product ?? "—"}</td>
-                    <td className="px-3 py-1.5 border border-border">{r.customer ?? "—"}</td>
-                    <td className="px-3 py-1.5 border border-border font-mono whitespace-nowrap">{r.soNumber ?? "—"}</td>
-                    <td className="px-3 py-1.5 border border-border font-mono whitespace-nowrap">{r.ticketId ?? "—"}</td>
-                    <td className="px-3 py-1.5 border border-border whitespace-nowrap">{r.jobType ?? "—"}</td>
-                    <td className="px-3 py-1.5 border border-border text-xs text-text-muted">{r.seenBy}</td>
-                  </tr>
+        <div className="overflow-x-auto border border-border rounded-control">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-surface-elevated">
+              <tr>
+                {COLUMNS.map((c) => (
+                  <th key={c.label} className="text-left px-3 py-2 border border-border text-xs uppercase tracking-wide text-text-muted whitespace-nowrap">{c.label}</th>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.barcodeDisplay}-${r.direction}-${i}`} className="hover:bg-surface-elevated">
+                  <td className="px-3 py-1.5 border border-border font-mono whitespace-nowrap">{r.barcodeDisplay}</td>
+                  <td className="px-3 py-1.5 border border-border whitespace-nowrap">{r.direction === "IN" ? "Inward" : "Outward"}</td>
+                  <td className="px-3 py-1.5 border border-border">{r.product ?? "—"}</td>
+                  <td className="px-3 py-1.5 border border-border">{r.customer ?? "—"}</td>
+                  <td className="px-3 py-1.5 border border-border font-mono whitespace-nowrap">{r.soNumber ?? "—"}</td>
+                  <td className="px-3 py-1.5 border border-border font-mono whitespace-nowrap">{r.ticketId ?? "—"}</td>
+                  <td className="px-3 py-1.5 border border-border whitespace-nowrap">{r.jobType ?? "—"}</td>
+                  <td className="px-3 py-1.5 border border-border text-xs text-text-muted">{r.seenBy}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Modal>
   );
+}
+
+/** The slice on screen, as a spreadsheet. */
+function exportSlice(rows: Row[], book: TruthSource, slice: Slice, dir: DirFilter, date: string, city: string) {
+  downloadTable(rows, COLUMNS, [
+    NAME[book],
+    slice.vs ? `${slice.kind}-${NAME[slice.vs]}` : slice.kind,
+    dir.toLowerCase(),
+    city !== "ALL" ? city : null,
+    date,
+  ]);
 }

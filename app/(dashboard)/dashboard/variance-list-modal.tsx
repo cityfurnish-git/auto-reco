@@ -18,12 +18,14 @@ import { EmptyState } from "@/components/empty-state";
 import { SortHeader, type SortState } from "@/components/sort-header";
 import { useSelection } from "@/lib/hooks/use-selection";
 import BulkActionBar from "./bulk-action-bar";
+import { downloadCsv, varianceRowsToCsv } from "@/lib/ui/variance-csv";
 import VarianceDetailModal from "./variance-detail-modal";
 import type { SessionUser } from "@/lib/demo-auth";
 import type { Bucket, Priority, VarianceDB, VarianceStatus } from "@/lib/db/schema";
 import type { City } from "@/lib/sample-data";
 import {
   patchVariance,
+  fetchAllVariances,
   useVariances,
   useVarianceFacets,
 } from "@/lib/hooks/use-dashboard-data";
@@ -106,7 +108,9 @@ export default function VarianceListModal({
   }, [searchInput]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const { rows, total, totalPages, businessDate, loading, error, refetch } = useVariances({
+  // ONE filter object for the table and the export, so a column the reader
+  // narrowed by can never be missing from the file they download.
+  const query = {
     city,
     date,
     // A free-text search spans every bucket/status/date, same rule as the page
@@ -121,7 +125,36 @@ export default function VarianceListModal({
     dir: sort.dir,
     page,
     pageSize: PAGE_SIZE,
-  });
+  };
+  const { rows, total, totalPages, businessDate, loading, error, refetch } = useVariances(query);
+  const [exporting, setExporting] = useState(false);
+
+  // EVERY ROW THE FILTERS MATCH, not the page on screen — the list paginates
+  // and the API caps a page at 200, so the visible rows are rarely the answer.
+  async function exportAll() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { rows: all, truncated } = await fetchAllVariances({
+        // Pin the date the server resolved, so a run landing mid-export cannot
+        // splice two days into one file.
+        ...query, date: date ?? businessDate ?? undefined, page: 1,
+      });
+      downloadCsv(
+        `variances_${String(city).toLowerCase()}_${businessDate ?? "all-dates"}.csv`,
+        varianceRowsToCsv(all)
+      );
+      if (truncated) {
+        toast.info(`Exported the first ${all.length} rows.`, { detail: "That is the export cap — narrow the filters for the rest." });
+      } else {
+        toast.success(`Exported ${all.length} row${all.length === 1 ? "" : "s"}.`);
+      }
+    } catch (e) {
+      toast.error("Export failed.", { detail: errText(e) });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Ops-type options for this dialog's scope. `enabled` keeps it from firing
   // while the dialog is closed — it is mounted by the dashboards at all times.
@@ -289,6 +322,14 @@ export default function VarianceListModal({
           </option>
         ))}
       </select>
+      {/* Beside the filters, because what it exports IS the filters — not the
+          rows on screen. Disabled on an empty result so it cannot produce a
+          file holding only a header row. */}
+      <button type="button" className="btn btn-compact btn-secondary"
+        disabled={exporting || loading || total === 0} onClick={exportAll}
+        title="Download every row matching these filters, not just this page">
+        <Icon name="download" size={15} /> {exporting ? "Exporting…" : "Export"}
+      </button>
     </div>
   );
 

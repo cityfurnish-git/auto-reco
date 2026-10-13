@@ -21,6 +21,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
 import { Modal } from "@/components/modal";
 import { ErrorState } from "@/components/error-state";
+import { downloadTable, type CsvColumn } from "@/lib/ui/csv-download";
 import type { CityAgg } from "@/lib/hooks/use-dashboard-data";
 
 interface CountedItem {
@@ -37,6 +38,23 @@ interface CountedItem {
   guard: string | null;
   recordedLate: boolean;
 }
+
+/** The table's columns, and its spreadsheet. The photo column is a button on
+ *  screen and a yes/no in the file — a CSV cannot carry the evidence itself,
+ *  and a blank would read as "no photograph" rather than "not exportable". */
+const EXPORT_COLUMNS: CsvColumn<CountedItem>[] = [
+  { label: "Time", of: (i) => istTime(i.scannedAt) },
+  { label: "City", of: (i) => i.city },
+  { label: "Way", of: (i) => (i.direction === "IN" ? "Inward" : "Outward") },
+  { label: "Item", of: (i) => KIND_LABEL[i.itemKind] ?? i.itemKind },
+  { label: "Qty", of: (i) => i.quantity },
+  { label: "Vehicle", of: (i) => i.vehicleNo },
+  { label: "Agent", of: (i) => i.agent },
+  { label: "Guard", of: (i) => i.guard },
+  { label: "Note", of: (i) => i.notes },
+  { label: "Photo", of: (i) => (i.hasPhoto ? "yes" : "no") },
+  { label: "Recorded late", of: (i) => (i.recordedLate ? "yes" : "no") },
+];
 
 const KIND_LABEL: Record<string, string> = {
   spare_part: "Spare part",
@@ -167,10 +185,16 @@ function CountedItemsModal({ date, city, onClose }: {
         )}
         {items && items.length > 0 && (
           <>
-            <p className="text-sm text-text-muted mb-3">
-              {items.length} entr{items.length === 1 ? "y" : "ies"} ·{" "}
-              <b className="text-text-primary">{total}</b> item{total === 1 ? "" : "s"} in total
-            </p>
+            <div className="flex items-center gap-3 mb-3">
+              <p className="text-sm text-text-muted">
+                {items.length} entr{items.length === 1 ? "y" : "ies"} ·{" "}
+                <b className="text-text-primary">{total}</b> item{total === 1 ? "" : "s"} in total
+              </p>
+              <button type="button" className="btn btn-compact btn-secondary ml-auto"
+                onClick={() => downloadTable(items, EXPORT_COLUMNS, ["counted-by-gate", date])}>
+                <Icon name="download" size={15} /> Export
+              </button>
+            </div>
             <div className="overflow-x-auto border border-border rounded-control">
               <table className="w-full text-sm border-collapse">
                 <thead className="bg-surface-elevated">

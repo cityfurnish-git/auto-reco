@@ -13,7 +13,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import { Modal } from "@/components/modal";
 import { ErrorState } from "@/components/error-state";
-import { useVariances, type VarianceFilters } from "@/lib/hooks/use-dashboard-data";
+import { fetchAllVariances, useVariances, type VarianceFilters } from "@/lib/hooks/use-dashboard-data";
+import { downloadCsv, varianceRowsToCsv } from "@/lib/ui/variance-csv";
+import { errText, useToast } from "@/components/toast";
 import { VARIANCE } from "@/lib/engine/variance-names";
 import { shownBarcode } from "@/lib/ui/barcode-display";
 import type { VarianceDB } from "@/lib/db/schema";
@@ -48,6 +50,29 @@ export default function InTransitSection({ city, date, onOpen }: {
     status: "ACTIVE", sort: "date", dir: "desc", page, pageSize: PAGE,
   }), [city, date, page]);
   const { rows, total, totalPages, loading, error, refetch } = useVariances(filters);
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  // EVERY ROW THE FILTER MATCHES, not the page on screen. The table paginates
+  // at 25 and the API caps a page at 200, so mapping over `rows` would hand
+  // over a confident-looking file holding a quarter of the items in transit.
+  async function exportAll() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { rows: all, truncated } = await fetchAllVariances(filters);
+      downloadCsv(`items-in-transit_${String(city).toLowerCase()}_${date || "latest"}.csv`, varianceRowsToCsv(all));
+      if (truncated) {
+        toast.info(`Exported the first ${all.length} rows.`, { detail: "That is the export cap — narrow by city or date for the rest." });
+      } else {
+        toast.success(`Exported ${all.length} row${all.length === 1 ? "" : "s"}.`);
+      }
+    } catch (e) {
+      toast.error("Export failed.", { detail: errText(e) });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // THE CUSTOMER THE GATE LOOKED UP, for rows that have none of their own.
   //
@@ -140,6 +165,17 @@ export default function InTransitSection({ city, date, onOpen }: {
           subtitle="Seen leaving by the gate or DT, with the Odoo Out reserved against the order but not yet validated. Validate the Out once delivered.">
           {error && <ErrorState what="items in transit" detail={error} onRetry={refetch} compact />}
           {loading && <p className="text-sm text-text-muted">Loading…</p>}
+          {!loading && !error && total > 0 && (
+            <div className="flex items-center gap-3 mb-3">
+              <p className="text-sm text-text-muted">
+                <span className="tabular-nums">{total}</span> item{total === 1 ? "" : "s"}
+              </p>
+              <button type="button" className="btn btn-compact btn-secondary ml-auto"
+                disabled={exporting} onClick={exportAll}>
+                <Icon name="download" size={15} /> {exporting ? "Exporting…" : "Export"}
+              </button>
+            </div>
+          )}
           {!loading && !error && (
             <div className="overflow-x-auto border border-border rounded-control">
               <table className="w-full text-sm border-collapse">

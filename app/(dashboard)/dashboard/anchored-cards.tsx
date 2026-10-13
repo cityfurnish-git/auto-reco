@@ -29,6 +29,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
 import { Modal } from "@/components/modal";
 import { ErrorState } from "@/components/error-state";
+import { downloadTable, type CsvColumn } from "@/lib/ui/csv-download";
 import { SOURCE_NAME } from "@/lib/ui/source-names";
 import type { CityAgg } from "@/lib/hooks/use-dashboard-data";
 
@@ -45,6 +46,19 @@ interface Row {
   product: string | null;
   seenBy: string;
 }
+
+/** The modal's table, and its spreadsheet — one definition, so a column can
+ *  never be on screen and missing from the file. */
+const EXPORT_COLUMNS: CsvColumn<Row>[] = [
+  { label: "Way", of: (r) => (r.direction === "IN" ? "Inward" : "Outward") },
+  { label: "Barcode", of: (r) => r.barcodeDisplay },
+  { label: "Product", of: (r) => r.product },
+  { label: "Customer", of: (r) => r.customer },
+  { label: "SO", of: (r) => r.soNumber },
+  { label: "Ticket", of: (r) => r.ticketId },
+  { label: "Job type", of: (r) => r.jobType },
+  { label: "Seen by", of: (r) => r.seenBy },
+];
 
 const CARDS: {
   key: Bucket;
@@ -215,10 +229,16 @@ function AnchoredModal({ bucket, date, city, onClose }: {
       {rows && rows.length === 0 && <p className="text-sm text-text-muted">Nothing in this group for the day.</p>}
       {rows && rows.length > 0 && (
         <>
-          <p className="text-sm text-text-muted mb-3">
-            {rows.length} movement{rows.length === 1 ? "" : "s"}
-            {capped && <span className="text-status-warning"> · showing the first 1,000 only</span>}
-          </p>
+          <div className="flex items-center gap-3 mb-3">
+            <p className="text-sm text-text-muted">
+              {rows.length} movement{rows.length === 1 ? "" : "s"}
+              {capped && <span className="text-status-warning"> · showing the first 1,000 only</span>}
+            </p>
+            <button type="button" className="btn btn-compact btn-secondary ml-auto"
+              onClick={() => downloadTable(rows, EXPORT_COLUMNS, [card.label, city !== "ALL" ? city : null, date])}>
+              <Icon name="download" size={15} /> Export
+            </button>
+          </div>
           <div className="overflow-x-auto border border-border rounded-control">
             <table className="w-full text-sm border-collapse">
               <thead className="bg-surface-elevated">

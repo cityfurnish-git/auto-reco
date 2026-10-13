@@ -7,6 +7,7 @@
 import type { VarianceDB } from "@/lib/db/schema";
 import { opsTypeLabel } from "@/lib/ui/variance-format";
 import { shownBarcode } from "./barcode-display";
+import { csvCell } from "./csv-download";
 
 const COLUMNS: { header: string; get: (v: VarianceDB) => string | number | null }[] = [
   { header: "Date", get: (v) => v.business_date },
@@ -32,14 +33,13 @@ const COLUMNS: { header: string; get: (v: VarianceDB) => string | number | null 
   { header: "Note", get: (v) => v.note },
 ];
 
-// RFC 4180 quoting. The old version only escaped the product column and used
-// bare commas elsewhere — any variance note or customer name containing a comma
-// shifted every later column by one.
-function cell(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return "";
-  const s = String(value);
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+// RFC 4180 quoting, now shared with the other dashboard exports (csvCell). The
+// version here escaped commas and quotes correctly but had NO formula guard —
+// a variance note or a customer name beginning with `=`, `+`, `-` or `@` is
+// executed by Excel and Sheets on open, and this is the file most likely to be
+// forwarded. The gate register's export has guarded that since it was written;
+// this one did not, which is exactly what one shared helper prevents.
+const cell = csvCell;
 
 export function varianceRowsToCsv(rows: VarianceDB[]): string {
   const lines = [COLUMNS.map((c) => cell(c.header)).join(",")];
