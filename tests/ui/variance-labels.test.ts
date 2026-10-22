@@ -48,10 +48,16 @@ describe("variance labels — coverage", () => {
   });
 
   it("never falls back to the raw internal string", () => {
+    // The second check used to be `display !== n`, on the reasoning that a
+    // label matching the stored name meant no label had been written. That
+    // proxy died on 22 Oct 2026, when the names themselves were rewritten in
+    // plain words: VARIANCE.SHEET_ONLY is now "Only MS has it" and so is its
+    // label, because both are finally saying the same plain thing. UNLABELLED
+    // is what the check was always really about, and it still bites.
     for (const n of NAMES) {
       const l = labelFor(n);
       expect(l, `${n} fell through to UNLABELLED`).not.toBe(UNLABELLED);
-      expect(l.display).not.toBe(n);
+      expect(l.display.trim(), `${n} has an empty label`).not.toBe("");
     }
   });
 

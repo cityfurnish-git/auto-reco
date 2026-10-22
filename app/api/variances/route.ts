@@ -3,8 +3,10 @@
 // ever see their own city's rows (variances_select policy), admins see all.
 //
 // Query params (all optional): city, date (business_date exact match),
-// dateFrom, dateTo, bucket (REAL|INFO), source (Odoo|DT|Sheet|Physical|Cross —
-// maps to variance_source), priority (High|Medium|Info), status
+// dateFrom, dateTo, bucket (REAL|INFO), source (Guard|MS|DT|Odoo — the book
+// MISSING the entry, answered from the absence table; the older
+// Odoo|DT|Sheet|Physical|Cross values still match variance_source),
+// priority (High|Medium|Info), status
 // (open|in_progress|closed), direction (IN|OUT|CROSS), variance (exact
 // variance_name), responsible (exact responsible slug), jobType (exact ops
 // type, or the __NONE__ sentinel for rows with none), q (free-text search
@@ -23,6 +25,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { searchAliases } from "@/lib/ui/variance-labels";
+import { namesAccusing, SOURCE_FILTER_KEY } from "@/lib/engine/absence-claim";
 import { jsonRoute } from "@/lib/api/json-route";
 import { attachFlags } from "@/lib/variances/attach-flags";
 import { createClient } from "@/lib/supabase/server";
@@ -134,7 +137,24 @@ export const GET = jsonRoute("variances", async (req: NextRequest) => {
     if (dateFrom) query = query.gte("business_date", dateFrom);
     if (dateTo) query = query.lte("business_date", dateTo);
     if (bucket) query = query.eq("bucket", bucket);
-    if (source) query = query.eq("variance_source", source);
+    // SOURCE MEANS "THIS BOOK IS MISSING THE ENTRY" (owner, 22 Oct 2026), which
+    // is not what the stored variance_source column says. That column names the
+    // book that STANDS OUT, and for the *_ONLY family that is the book which
+    // DID record the unit — Delhi's biggest October group, 482 rows where Guard
+    // and Odoo hold the unit and MS and DT do not, is filed there under Guard,
+    // the one book that did its job. So the filter is answered from the absence
+    // table instead: the names that accuse this book of being short.
+    //
+    // The old column values stay accepted so an existing link or saved filter
+    // does not break.
+    if (source && source in SOURCE_FILTER_KEY) {
+      const accusing = namesAccusing(
+        SOURCE_FILTER_KEY[source as keyof typeof SOURCE_FILTER_KEY]
+      );
+      query = query.in("variance_name", accusing);
+    } else if (source) {
+      query = query.eq("variance_source", source);
+    }
     if (priority) query = query.eq("priority", priority);
     // Comma-separated status accepted so a view can span several. The one that
     // matters is "open,in_progress": flagging a variance moves it to

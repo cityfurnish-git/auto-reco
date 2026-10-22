@@ -17,10 +17,14 @@
 //
 //   one book missing   "Not in Odoo"              three books agree — strongest
 //   two missing        "Not in tracker or Odoo"   two agree
-//   three missing      "Only the sheet has it"    one book — weakest
+//   three missing      "Only MS has it"    one book — weakest
 //
 // Books are named the same way everywhere: gate log, sheet, tracker, Odoo.
-// Never "DT", never "Ops", never "+ Confirm —" — those are the engine's words.
+// ONE VOCABULARY, and since 22 Oct 2026 it is the owner's own: Guard, MS, DT,
+// Odoo. These labels used to say "the gate log", "the tracker" and "the sheet"
+// while the engine names said Gate Register / DT / Ops Sheet and the phrases
+// said Guard Check / Delivery Tracker / Manual Sheet — three vocabularies on
+// one screen, which is a large part of why the names read as confusing.
 //
 // WHAT THIS REPLACED, and why it mattered: "Missing in system" was the display
 // for THREE different variances (gate only, sheet only, gate + sheet) and
@@ -103,54 +107,54 @@ interface LabelRule {
 const SYSTEM_ONLY_ODOO: VarianceLabel = {
   display: "Only Odoo has it · booked today",
   tier: 1,
-  risk: "Odoo booked a customer movement today that nobody at the gate, on the sheet or in the app saw.",
+  risk: "Odoo booked a customer movement today that nobody at the gate, on MS or in the app saw.",
   action: "Confirm the unit moved, or cancel the Odoo entry.",
 };
 
 const SYSTEM_ONLY_APP: VarianceLabel = {
-  display: "Only the tracker has it",
+  display: "Only DT has it",
   tier: 1,
   risk: "Only the delivery app says this unit moved; nobody on the floor logged it.",
   action: "Confirm the unit physically left, or void the app entry.",
 };
 
 const OFF_SYSTEM_GATE: VarianceLabel = {
-  display: "Only the gate log has it",
+  display: "Only the Guard has it",
   tier: 1,
   risk: "Only the guard saw this unit leave — nothing else in the business recorded it.",
-  action: "Trace the unit, then record it on the sheet, the app and Odoo.",
+  action: "Trace the unit, then record it on MS, the app and Odoo.",
 };
 
 const OFF_SYSTEM_SHEET: VarianceLabel = {
-  display: "Only the sheet has it",
+  display: "Only MS has it",
   tier: 1,
-  risk: "Only the ops sheet says this moved; the guard, the app and Odoo have nothing.",
+  risk: "Only MS says this moved; the guard, the app and Odoo have nothing.",
   action: "Confirm the movement happened, then record it everywhere.",
 };
 
 const OFF_SYSTEM_FLOOR: VarianceLabel = {
-  display: "Not in tracker or Odoo",
+  display: "Not in DT or Odoo",
   tier: 1,
   risk: "The unit left the gate and neither the delivery app nor Odoo knows it went.",
   action: "Find the order, scan it in the app, post it in Odoo.",
 };
 
 const UNLOGGED_ARRIVAL_GATE: VarianceLabel = {
-  display: "Only the gate log has it · arrival",
+  display: "Only the Guard has it · arrival",
   tier: 2,
   risk: "A unit came in past the guard and no system has it — we are holding stock the books do not show.",
-  action: "Add it to the sheet and book it into Odoo.",
+  action: "Add it to MS and book it into Odoo.",
 };
 
 const UNLOGGED_ARRIVAL_SHEET: VarianceLabel = {
-  display: "Only the sheet has it · arrival",
+  display: "Only MS has it · arrival",
   tier: 2,
   risk: "The sheet has an arrival nothing else recorded, so the count on hand is unproven.",
   action: "Confirm the unit is on the floor and book it in.",
 };
 
 const UNLOGGED_ARRIVAL_FLOOR: VarianceLabel = {
-  display: "Not in tracker or Odoo · arrival",
+  display: "Not in DT or Odoo · arrival",
   tier: 2,
   risk: "Both floor books have the arrival; the app and Odoo do not, so it is not counted as available.",
   action: "Scan it in the app and post the receipt in Odoo.",
@@ -164,7 +168,7 @@ const UNCLOSED_RETURN: VarianceLabel = {
 };
 
 const GHOST_DISPATCH: VarianceLabel = {
-  display: "Sheet says not delivered",
+  display: "MS says not delivered",
   tier: 1,
   risk: "The floor says this was not delivered while the app or Odoo says it went — one of them is wrong about a unit leaving the building.",
   action: "Establish whether the unit left, then correct the record that is wrong.",
@@ -332,7 +336,7 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
   [VARIANCE.OPS_ODOO_NO_GATE]: {
     base: registerGap(
       "Not in gate log or tracker",
-      "The sheet and Odoo have the movement; neither the gate log nor the tracker does.",
+      "The sheet and Odoo have the movement; neither the Guard log nor DT does.",
       "Remind the guard post to write every unit in the book."
     ),
   },
@@ -346,22 +350,22 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
   [VARIANCE.DT_ODOO_NO_SHEET]: {
     base: registerGap(
       "Not in gate log or sheet",
-      "The tracker and Odoo have the movement; neither the gate log nor the sheet does.",
-      "Add the missing line to the ops sheet."
+      "The tracker and Odoo have the movement; neither the Guard log nor MS does.",
+      "Add the missing line to MS."
     ),
   },
   [VARIANCE.GATE_OPS_ODOO_NO_DT]: {
     base: registerGap(
-      "Not in the tracker",
-      "The gate log, the sheet and Odoo all agree the unit moved; only the tracker has no scan.",
+      "Not in DT",
+      "The gate log, MS and Odoo all agree the unit moved; only DT has no scan.",
       "Scan the unit in the app to close the record."
     ),
   },
   [VARIANCE.GATE_ODOO_NO_OPS_DT]: {
     base: registerGap(
       "Not in sheet or tracker",
-      "The guard's book and Odoo confirm the movement; the sheet and the app both missed it.",
-      "Write the line into the sheet and scan it in the app."
+      "The guard's book and Odoo confirm the movement; MS and the app both missed it.",
+      "Write the line into MS and scan it in the app."
     ),
   },
 
@@ -440,16 +444,16 @@ export const VARIANCE_LABELS: Record<VarianceName, LabelRule> = {
   },
   [VARIANCE.SHEET_DT_ODOO_NO_GATE]: {
     base: registerGap(
-      "Not in the gate log",
-      "The sheet, the tracker and Odoo all have this movement; the gate log has no line for it, so the unit passed the gate unrecorded.",
+      "Not in the Guard log",
+      "The sheet, DT and Odoo all have this movement; the Guard log has no line for it, so the unit passed the gate unrecorded.",
       "Find out how the unit crossed the gate without being logged."
     ),
   },
   [VARIANCE.GATE_DT_ODOO_NO_SHEET]: {
     base: registerGap(
-      "Not in the sheet",
-      "The gate log, the tracker and Odoo all have this movement; the ops sheet has no line for it.",
-      "Add the line to the ops sheet."
+      "Not in MS",
+      "The gate log, DT and Odoo all have this movement; MS has no line for it.",
+      "Add the line to MS."
     ),
   },
 };
@@ -536,6 +540,18 @@ const RENAMED: Record<string, string> = {
   "All Sources Agree — Barcode Text Differs (OCR/Typo)": VARIANCE.FIELD_MISMATCH,
   "Duplicate Scan — Same Barcode Logged Twice": VARIANCE.DUPLICATE,
 };
+
+/**
+ * The name to SHOW for a stored name — the current spelling, always.
+ *
+ * So the rename is visible the moment the code deploys, whether or not
+ * migration 0051 has run yet, and stays correct for any row the migration
+ * cannot reach. Without this the order of the two would matter: code first and
+ * the dropdown lists old spellings; migration first and the old code writes old
+ * spellings back.
+ */
+export const displayName = (stored: string | null | undefined): string =>
+  (stored && (RENAMED[stored] ?? stored)) || "";
 
 /**
  * Current names whose OLD spelling contains the typed text.

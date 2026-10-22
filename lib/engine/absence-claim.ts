@@ -124,3 +124,38 @@ export function absenceContradicted(
   if (testable.length === 0) return false;
   return testable.every((k) => presentNow[k]);
 }
+
+/**
+ * Every current variance name that accuses this book of not holding the unit.
+ *
+ * THE "SOURCE" FILTER ON THE DASHBOARD. Owner, 22 Oct 2026: "Instead of
+ * 'owner', replace it with source (Odoo/Guard/DT/MS)". Source means the book
+ * that is MISSING the entry — the one somebody would go and ask about — so a
+ * movement two books missed appears under both, which is right: it is two
+ * people to chase, not one.
+ *
+ * NOT varianceSource(), for the reason this whole module exists. That names the
+ * book that STANDS OUT, which for the *_ONLY family is the book that did record
+ * the unit. Delhi's biggest group in October — 482 rows where Guard and Odoo
+ * both hold the unit and MS and DT do not — is filed by varianceSource under
+ * Guard, the one book that did its job, so "Source = Guard" would have answered
+ * mostly with the Guard being right.
+ *
+ * The nine names that make no absence claim (a status conflict, a duplicate
+ * inside one book, a barcode that does not exist yet) belong to no source and
+ * appear only when no source is chosen. That is the honest answer: they are not
+ * about a book being short.
+ */
+export function namesAccusing(book: SourceKey): string[] {
+  return Object.entries(ABSENCE_CLAIM)
+    .filter(([, claim]) => claim.includes(book))
+    .map(([name]) => name);
+}
+
+/** The filter's four values → the key the claim table uses. */
+export const SOURCE_FILTER_KEY: Record<"Guard" | "MS" | "DT" | "Odoo", SourceKey> = {
+  Guard: "P",
+  MS: "S",
+  DT: "D",
+  Odoo: "O",
+};

@@ -194,12 +194,30 @@ export function useVarianceFacets(scope: {
   city?: City | "ALL";
   date?: string;
   enabled?: boolean;
+  /**
+   * The rest of what the table is filtered to, so the options describe the rows
+   * the reader can actually see.
+   *
+   * Owner, 22 Oct 2026: "only show those problems which have one or greater
+   * than one entries". The count beside each option used to be the REAL count
+   * while the list defaulted to REAL, so a type whose rows were all notes read
+   * "(0)" and returned an empty table — 7 of Delhi's 15 options on 21 Oct, the
+   * top one hiding 49 rows. Passing the live filters makes an empty option
+   * impossible.
+   */
+  bucket?: Bucket | "ALL";
+  status?: VarianceStatus | "ALL" | "ACTIVE";
+  source?: string;
 }) {
   const [varianceNames, setVarianceNames] = useState<Facet[]>([]);
   const [responsibles, setResponsibles] = useState<Facet[]>([]);
   const [opsTypes, setOpsTypes] = useState<Facet[]>([]);
+  const [sources, setSources] = useState<Facet[]>([]);
   const seq = useRef(0);
-  const key = `${scope.city ?? "ALL"}|${scope.date ?? ""}|${scope.enabled !== false}`;
+  const key = [
+    scope.city ?? "ALL", scope.date ?? "", scope.enabled !== false,
+    scope.bucket ?? "", scope.status ?? "", scope.source ?? "",
+  ].join("|");
 
   // No set-state-in-effect disable needed here: every setState below is inside
   // an async .then, never in the effect's synchronous body.
@@ -209,6 +227,9 @@ export function useVarianceFacets(scope: {
     const p = new URLSearchParams();
     if (scope.city && scope.city !== "ALL") p.set("city", scope.city);
     if (scope.date) p.set("date", scope.date);
+    if (scope.bucket && scope.bucket !== "ALL") p.set("bucket", scope.bucket);
+    if (scope.status) p.set("status", scope.status);
+    if (scope.source && scope.source !== "ALL") p.set("source", scope.source);
     fetch(`/api/variances/facets?${p}`, { credentials: "same-origin" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
@@ -216,6 +237,7 @@ export function useVarianceFacets(scope: {
         setVarianceNames(json.varianceNames ?? []);
         setResponsibles(json.responsibles ?? []);
         setOpsTypes(json.opsTypes ?? []);
+        setSources(json.sources ?? []);
       })
       // A failed facet fetch must not break the table — the filters just stay
       // empty, which reads as "no options" rather than an error state.
@@ -224,7 +246,7 @@ export function useVarianceFacets(scope: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return { varianceNames, responsibles, opsTypes };
+  return { varianceNames, responsibles, opsTypes, sources };
 }
 
 // ─── Bulk actions ───────────────────────────────────────────────────────────

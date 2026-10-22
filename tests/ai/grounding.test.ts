@@ -62,7 +62,12 @@ describe("describeFlag — owner vocabulary only", () => {
   it("translates every canonical name without leaking an internal one", () => {
     for (const name of Object.values(VARIANCE)) {
       const f = describeFlag({ variance_name: name, status: "open" });
-      expect(f.problem).not.toBe(name);
+      // NOT `!== name` any more. That stood in for "a label was written", and
+      // it stopped meaning that on 22 Oct 2026 when the names were rewritten in
+      // plain words — the label and the name now coincide for several, which is
+      // the point rather than a gap. The banned-word check below is what
+      // actually guards the vocabulary.
+      expect(f.problem.trim(), name).not.toBe("");
       expect(containsBannedWords(JSON.stringify(f)), name).toEqual([]);
       expect(f.team).toMatch(/team/i);
     }

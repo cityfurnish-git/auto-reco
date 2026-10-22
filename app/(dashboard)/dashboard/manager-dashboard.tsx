@@ -15,7 +15,7 @@ import { VARIANCE } from "@/lib/engine/variance-names";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionUser } from "@/lib/demo-auth";
 import type { City } from "@/lib/sample-data";
-import type { Bucket, Priority, VarianceDB, VarianceStatus } from "@/lib/db/schema";
+import type { Bucket, VarianceDB, VarianceStatus } from "@/lib/db/schema";
 import CloseVarianceModal, { type ClosureReason } from "./close-variance-modal";
 import VarianceDetailModal from "./variance-detail-modal";
 import VarianceListModal, { type ListModalRequest } from "./variance-list-modal";
@@ -29,7 +29,6 @@ import {
   ageLabel,
   formatTs,
   opsTypeLabel,
-  responsibleLabel,
 } from "@/lib/ui/variance-format";
 import { SortHeader, type SortState } from "@/components/sort-header";
 import { RowCheckbox, SelectAllCheckbox } from "@/components/row-checkbox";
@@ -60,11 +59,12 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
   const toast = useToast();
   const city = user.city as City;
   const [bucket, setBucket] = useState<Bucket | "ALL">("REAL");
-  const [priority, setPriority] = useState<Priority | "ALL">("ALL");
   const [statusF, setStatusF] = useState<VarianceStatus | "ALL" | "ACTIVE">("ACTIVE");
   const [varianceName, setVarianceName] = useState<string>("ALL");
-  const [responsible, setResponsible] = useState<string>("ALL");
-  const [opsType, setOpsType] = useState<string>("ALL");
+  // THE BOOK THAT IS MISSING THE ENTRY, replacing the team-name "Owner" filter.
+  // Owner, 22 Oct 2026: "Instead of 'owner', replace it with source
+  // (Odoo/Guard/DT/MS)". A movement two books missed appears under both.
+  const [source, setSource] = useState<string>("ALL");
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "desc" });
   const [searchInput, setSearchInput] = useState("");
   const [q, setQ] = useState("");
@@ -124,11 +124,9 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
       // While searching, span every bucket/priority/status/date so a targeted
       // barcode/ticket/SO lookup always surfaces the record.
       bucket: q ? "ALL" : bucket,
-      priority: q ? "ALL" : priority,
       status: q ? "ALL" : statusF,
       variance: q ? "ALL" : varianceName,
-      responsible: q ? "ALL" : responsible,
-      jobType: q ? "ALL" : opsType,
+      source: q ? undefined : source === "ALL" ? undefined : (source as never),
       date: q ? undefined : dateF || undefined,
       // A search must find the barcode whatever night it landed on; everything
       // else stays scoped to a single run so the table agrees with the KPIs.
@@ -139,16 +137,19 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
       page,
       pageSize: PAGE_SIZE,
     }),
-    [city, bucket, priority, statusF, varianceName, responsible, opsType, dateF, q, sort, page]
+    [city, bucket, statusF, varianceName, source, dateF, q, sort, page]
   );
   const { rows, total, totalPages, businessDate, sortDegraded, loading, error, refetch } =
     useVariances(filters);
 
-  // Options come from this city's data, so the dropdowns only offer filters
-  // that will return something.
-  const { varianceNames, responsibles, opsTypes } = useVarianceFacets({
+  // Options describe THE ROWS IN VIEW, not the day's whole table, so no option
+  // can come back empty — see useVarianceFacets for the 21 Oct measurement.
+  const { varianceNames, sources } = useVarianceFacets({
     city,
     date: dateF || undefined,
+    bucket,
+    status: statusF,
+    source,
   });
 
   // Sorting is server-side, so a new sort must restart at page 1 — otherwise
@@ -161,21 +162,17 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
   // Any filter is on = the empty state is recoverable, so offer the way out.
   const filtersActive =
     bucket !== "REAL" ||
-    priority !== "ALL" ||
     statusF !== "ACTIVE" ||
     varianceName !== "ALL" ||
-    responsible !== "ALL" ||
-    opsType !== "ALL" ||
+    source !== "ALL" ||
     !!dateF ||
     !!q;
 
   function clearFilters() {
     setBucket("REAL");
-    setPriority("ALL");
     setStatusF("ACTIVE");
     setVarianceName("ALL");
-    setResponsible("ALL");
-    setOpsType("ALL");
+    setSource("ALL");
     setDateF("");
     setSearchInput("");
     setPage(1);
@@ -457,69 +454,65 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
             </div>
             {/* The date picker moved to the page header — it governs the KPI
                 tiles too, not just this table. */}
-            <select value={bucket} onChange={(e) => resetPage(setBucket)(e.target.value as Bucket | "ALL")} className="input-clean font-semibold cursor-pointer">
-              <option value="ALL">All items</option>
+            {/* FIVE CONTROLS, down from eight (owner, 22 Oct 2026: "Reduce them
+                to minimum but explain first").
+
+                Gone: the High/Medium/Info dropdown, which asked the same
+                question as the one beside it — only three of its twelve
+                pairings exist in the data, so nine of them always returned an
+                empty list. Gone too: four of the six status options, because in
+                36,647 rows ever recorded only `open` and `closed` have really
+                existed ("Pending Approval" never once, "Flagged" three times,
+                last on 3 August). And the job-type dropdown, whose values are
+                hand-typed on the movement sheet and split one job across
+                several spellings — it is a column on the row, not a filter.
+
+                What is left answers a question somebody actually asks: what
+                kind of problem, which book is short, is it still open. */}
+            <select value={bucket} onChange={(e) => resetPage(setBucket)(e.target.value as Bucket | "ALL")} className="input-clean font-semibold cursor-pointer" title="Chase items, or notes for the record">
               <option value="REAL">Needs chasing</option>
               <option value="INFO">Needs nothing</option>
+              <option value="ALL">All items</option>
             </select>
-            <select value={priority} onChange={(e) => resetPage(setPriority)(e.target.value as Priority | "ALL")} className="input-clean cursor-pointer">
-              <option value="ALL">Any priority</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Info">Info</option>
-            </select>
-            <select value={statusF} onChange={(e) => resetPage(setStatusF)(e.target.value as VarianceStatus | "ALL" | "ACTIVE")} className="input-clean cursor-pointer">
-              {/* "Needs action" spans open + in_progress. Flagging moves a row
-                  to in_progress, and a plain "open" filter hid exactly the rows
-                  the flag was meant to escalate. */}
+            <select value={statusF} onChange={(e) => resetPage(setStatusF)(e.target.value as VarianceStatus | "ALL" | "ACTIVE")} className="input-clean cursor-pointer" title="Still open, or already closed">
+              {/* "Still needs someone" spans open + in_progress: flagging moves
+                  a row to in_progress, and a plain "open" filter hid exactly
+                  the rows the flag was meant to escalate. */}
               <option value="ACTIVE">Still needs someone</option>
-              <option value="open">Open only</option>
-              <option value="in_progress">Flagged / in progress</option>
-              <option value="pending_approval">Pending Approval</option>
               <option value="closed">Closed</option>
               <option value="ALL">Any status</option>
             </select>
-            {/* Variance type — lets a manager work one cause at a time instead
-                of a mixed list. */}
+            {/* Problem type — lets a manager work one cause at a time instead
+                of a mixed list. The count is the rows IN VIEW, so an option
+                that would return nothing is not offered at all. */}
             <select
               value={varianceName}
               onChange={(e) => resetPage(setVarianceName)(e.target.value)}
-              className="input-clean cursor-pointer max-w-[220px]"
-              title="Filter to one kind of variance"
+              className="input-clean cursor-pointer max-w-[300px]"
+              title="Work one kind of problem at a time"
             >
               <option value="ALL">All problem types</option>
               {varianceNames.map((f) => (
                 <option key={f.value} value={f.value}>
-                  {f.value} ({f.real})
+                  {f.value} ({f.count})
                 </option>
               ))}
             </select>
+            {/* WHICH BOOK IS SHORT, which is who you go and ask. A movement two
+                books missed is listed under both — two people to chase, not
+                one. Problems that are not about a missing entry (a duplicate
+                scan, a barcode that does not exist yet) belong to no book and
+                appear only under "Any source". */}
             <select
-              value={responsible}
-              onChange={(e) => resetPage(setResponsible)(e.target.value)}
+              value={source}
+              onChange={(e) => resetPage(setSource)(e.target.value)}
               className="input-clean cursor-pointer"
-              title="Filter to the team that owns these"
+              title="Which book has no entry for this movement"
             >
-              <option value="ALL">All Owners</option>
-              {responsibles.map((f) => (
+              <option value="ALL">Any source</option>
+              {sources.map((f) => (
                 <option key={f.value} value={f.value}>
-                  {responsibleLabel(f.value)} ({f.real})
-                </option>
-              ))}
-            </select>
-            {/* Ops type. Options come from the data, and the "(none)" bucket is
-                explicit because job_type is null on a large share of rows — a
-                filter that could not reach them would hide real losses. */}
-            <select
-              value={opsType}
-              onChange={(e) => resetPage(setOpsType)(e.target.value)}
-              className="input-clean cursor-pointer max-w-[200px]"
-              title="Filter to one ops type"
-            >
-              <option value="ALL">All job types</option>
-              {opsTypes.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {opsTypeLabel(f.value)} ({f.real})
+                  {f.value} ({f.count})
                 </option>
               ))}
             </select>
@@ -678,7 +671,24 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
                       : ""
                   }`}
                 >
-                  <td onClick={(e) => e.stopPropagation()} className="col-pin col-pin-1">
+                  {/* THE SPLIT, VISIBLE WITHOUT FILTERING FOR IT. Red is three
+                      books short, amber one or two, grey a note for the record.
+                      It means the chase-or-note question is answered by looking
+                      rather than by choosing, which is what let four of the
+                      eight filter controls go. */}
+                  <td
+                    onClick={(e) => e.stopPropagation()}
+                    className={`col-pin col-pin-1 border-l-[3px] ${
+                      v.bucket !== "REAL"
+                        ? "border-l-border"
+                        : v.priority === "High"
+                          ? "border-l-danger"
+                          // status-warning, not warning: the bare token is
+                          // light-mode only (--cf-warn), while this one reads
+                          // --color-warning-fg, which both themes define.
+                          : "border-l-status-warning"
+                    }`}
+                  >
                     <RowCheckbox
                       checked={sel.has(v.id)}
                       onChange={(shift) => onRowCheck(v.id, shift)}

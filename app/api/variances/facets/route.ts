@@ -15,6 +15,8 @@
 // via the cookie client, so a manager's facets cover only their own city.
 
 import { NextResponse, type NextRequest } from "next/server";
+import { absenceClaim, namesAccusing, SOURCE_FILTER_KEY } from "@/lib/engine/absence-claim";
+import { displayName } from "@/lib/ui/variance-labels";
 import { jsonRoute } from "@/lib/api/json-route";
 import { createClient } from "@/lib/supabase/server";
 import { OPS_TYPE_NONE } from "@/lib/ui/variance-format";
@@ -37,6 +39,20 @@ export const GET = jsonRoute("variances/facets", async (req: NextRequest) => {
   const city = sp.get("city");
   const allDates = sp.get("dates") === "all";
   let businessDate: string | null = sp.get("date");
+  // THE OPTIONS MUST DESCRIBE THE ROWS IN FRONT OF THE READER, not the day's
+  // whole table. Owner, 22 Oct 2026: "only show those problems which have one
+  // or greater than one entries, otherwise there is no point of showing a long
+  // dropdown list with zero entries too."
+  //
+  // The count beside each option used to be the REAL count while the list
+  // itself defaulted to REAL, so any problem type whose rows were all notes
+  // read as "(0)" and returned an empty table when picked. On 21 Oct that was
+  // 7 of Delhi's 15 options, the top one hiding 49 rows. Scoping the tally by
+  // the same bucket/status/source the table is using makes an empty option
+  // impossible rather than merely unlikely.
+  const bucket = sp.get("bucket");
+  const status = sp.get("status");
+  const source = sp.get("source");
 
   if (!businessDate && !allDates) {
     const { data: latest } = await supabase
@@ -58,6 +74,10 @@ export const GET = jsonRoute("variances/facets", async (req: NextRequest) => {
     job_type: string | null;
     bucket: string;
   }[] = [];
+  const sourceNames =
+    source && source !== "ALL" && source in SOURCE_FILTER_KEY
+      ? namesAccusing(SOURCE_FILTER_KEY[source as keyof typeof SOURCE_FILTER_KEY])
+      : null;
   for (let from = 0; ; from += 1000) {
     let query = supabase
       .from("variances")
@@ -67,6 +87,11 @@ export const GET = jsonRoute("variances/facets", async (req: NextRequest) => {
       .range(from, from + 999);
     if (city) query = query.eq("city", city);
     if (businessDate) query = query.eq("business_date", businessDate);
+    if (bucket && bucket !== "ALL") query = query.eq("bucket", bucket);
+    // "ACTIVE" is the triage default — everything still needing a human.
+    if (status === "ACTIVE") query = query.in("status", ["open", "in_progress"]);
+    else if (status && status !== "ALL") query = query.eq("status", status);
+    if (sourceNames) query = query.in("variance_name", sourceNames);
 
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -80,12 +105,28 @@ export const GET = jsonRoute("variances/facets", async (req: NextRequest) => {
   const owners = new Map<string, { count: number; real: number }>();
   const opsTypes = new Map<string, { count: number; real: number }>();
 
+  const sources = new Map<string, { count: number; real: number }>();
+
   for (const r of rows) {
     const isReal = r.bucket === "REAL";
-    const n = names.get(r.variance_name) ?? { count: 0, real: 0 };
+    // ONE OPTION PER NAME, under its current spelling. A row the rename
+    // migration has not reached still stores an older one, and listing both
+    // would offer the reader the same problem twice.
+    const shown = displayName(r.variance_name);
+    const n = names.get(shown) ?? { count: 0, real: 0 };
     n.count += 1;
     if (isReal) n.real += 1;
-    names.set(r.variance_name, n);
+    names.set(shown, n);
+
+    // Which books this row says are short. A row short two books counts under
+    // both; a row that makes no absence claim counts under none.
+    for (const [label, key] of Object.entries(SOURCE_FILTER_KEY)) {
+      if (!absenceClaim(shown).includes(key)) continue;
+      const sc = sources.get(label) ?? { count: 0, real: 0 };
+      sc.count += 1;
+      if (isReal) sc.real += 1;
+      sources.set(label, sc);
+    }
 
     if (r.responsible) {
       const o = owners.get(r.responsible) ?? { count: 0, real: 0 };
@@ -116,5 +157,10 @@ export const GET = jsonRoute("variances/facets", async (req: NextRequest) => {
     varianceNames: toList(names),
     responsibles: toList(owners),
     opsTypes: toList(opsTypes),
+    // The four books, in the order the dashboards show them — not by count, so
+    // the control does not reshuffle as the day fills up.
+    sources: ["Guard", "MS", "DT", "Odoo"]
+      .map((value) => ({ value, ...(sources.get(value) ?? { count: 0, real: 0 }) }))
+      .filter((f) => f.count > 0),
   });
 });
