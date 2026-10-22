@@ -11,6 +11,13 @@ units" — it is "this unit is in these books and not those, and here is who own
 Longer prose version: `handover/` (note: `README.md` and `handover/*` are stale in
 places — they predate the gate subsystem and quote old cron times).
 
+**Read `../skill/AUTO-RECO-SKILL.md` at the start of every session**, and update it
+roughly every ten prompts (owner's instruction, 22 Oct 2026). It sits OUTSIDE this
+repository, so nothing loads it automatically — this line is the only pointer to it.
+It holds what the tool is, every rule in plain language, the dated decisions behind
+them, what is still open, and how the owner wants to be worked with. This file stays
+the engineering half: invariants, traps, and how not to break the code.
+
 ---
 
 ## Where this lives now
