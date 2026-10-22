@@ -889,9 +889,13 @@ describe("Section 6 — variance ladder", () => {
     expect(v.variance_name).toBe(VARIANCE.GATE_OPS_ODOO_NO_DT);
     // Promoted from INFO on 6 Oct 2026: three independent books holding the
     // unit makes the fourth book's silence somebody's job, not an audit note.
-    // No longer dampened, so it keeps the priority the ladder gave it.
+    //
+    // MEDIUM, not High, since 22 Oct: a chase item is ranked by how many books
+    // are SHORT of the unit. Three agreeing means the movement is not in doubt
+    // and the gap is a record somebody owns — the High band is for the rows
+    // where only one book saw the unit at all.
     expect(v.bucket).toBe("REAL");
-    expect(v.priority).toBe("High");
+    expect(v.priority).toBe("Medium");
   });
 
   it("all four present & consistent → no variance", () => {

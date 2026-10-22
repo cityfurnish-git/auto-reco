@@ -234,6 +234,64 @@ function metaFor(name: string): VarianceMeta {
 //
 // `present` is the opposite case — per row — so it stays required, which is
 // what makes every construction site a build error until it supplies one.
+/**
+ * HOW URGENT A CHASE ITEM IS — ordered by how many books are SHORT of the unit.
+ *
+ * Owner's rule, 22 Oct 2026. The fewer books that agree, the less certain
+ * anybody is that the unit is where the paperwork says. One book claiming a
+ * movement three others never saw is the alarming case; three books agreeing
+ * with one gap is a record to fix.
+ *
+ * WHAT THIS REPLACED was not a worse ordering, it was no ordering at all.
+ * Measured 2-21 Oct, the chase list ran in a U: 359 rows where THREE books were
+ * short, 23 where TWO were, 419 where ONE was. The middle band — 936 further
+ * rows, the largest single group in the system — sat filed as "no action
+ * needed". Nobody designed that; it is what a year of adding one rule at a time
+ * produces, and the gap it left was the 479 rows reading "the gate and Odoo
+ * both have this unit, the sheet and the tracker have never heard of it".
+ *
+ * THREE LEVELS, BECAUSE THE COLUMN HAS THREE. priority_rank (migration 0011) is
+ * generated from this word: High 0, Medium 1, Info 2. "Info" is the whole
+ * product's word for "nothing to do", so it is never put on a chase item — the
+ * two most uncertain bands take High and Medium and the certain one shares
+ * Medium. Separating those two needs a fourth word and a migration; it is a
+ * refinement, not the point of the change.
+ *
+ * MISMATCHES ARE NOT RANKED LAST. Several of them are the most urgent thing in
+ * the system: a wrong unit scanned means two customers hold each other's
+ * furniture, and a unit with no barcode after 24 hours is physically present
+ * and invisible to every system. They are placed on what they mean, not on the
+ * fact that they are not an absence.
+ */
+const CHASE_PRIORITY: Record<string, Priority> = {
+  // THREE BOOKS SHORT — one record, nothing corroborating it.
+  [VARIANCE.GATE_ONLY]: "High",
+  [VARIANCE.SHEET_ONLY]: "High",
+  [VARIANCE.DT_ONLY]: "High",
+  [VARIANCE.ODOO_ONLY_TODAY]: "High",
+
+  // TWO BOOKS SHORT — two say it moved, two never saw it.
+  [VARIANCE.GATE_OPS_NO_DT_ODOO]: "Medium",
+  [VARIANCE.PICKUP_ODOO_OPEN]: "Medium",
+
+  // ONE BOOK SHORT — three agree, so the movement is not in doubt and the gap
+  // is a record somebody owns.
+  [VARIANCE.FLOOR_DT_NOT_ODOO]: "Medium",
+  [VARIANCE.GATE_OPS_ODOO_NO_DT]: "Medium",
+  [VARIANCE.SHEET_DT_ODOO_NO_GATE]: "Medium",
+  [VARIANCE.GATE_DT_ODOO_NO_SHEET]: "Medium",
+
+  // NOT ABSENCES. Placed on what each one means.
+  [VARIANCE.WRONG_SCAN]: "High",          // two units now on each other's records
+  [VARIANCE.BARCODE_OVERDUE]: "High",     // on the floor, invisible to everything
+  [VARIANCE.FAILED_DELIVERY]: "High",     // left the building, nothing says it returned
+  [VARIANCE.SHEET_NOT_DONE_BUT_POSTED]: "High", // two books flatly contradict each other
+  [VARIANCE.REPLACEMENT_CONFIRM]: "High", // a swap, or the same movement counted twice
+  [VARIANCE.ODD_HOUR_TRIP]: "High",       // who authorised a van at 3am
+  [VARIANCE.OT_CASE]: "Medium",           // bookkeeping, but only a person can map it
+  [VARIANCE.ODOO_PAST_DEADLINE]: "Medium",// the entry EXISTS; the deadline was missed
+};
+
 export function applyBucket(
   row: Omit<VarianceRowOut, "bucket" | "responsible" | "note" | "reported"> & {
     note?: string;
@@ -257,8 +315,11 @@ export function applyBucket(
 
   return {
     ...row,
+    // Ordered by how many books are short — see CHASE_PRIORITY. Falls back to
+    // whatever the ladder decided for any name not listed there, so a new
+    // variance is never silently ranked by omission.
     bucket: "REAL",
-    priority: naturalPriority,
+    priority: CHASE_PRIORITY[row.variance_name] ?? naturalPriority,
     responsible: row.responsible ?? meta.responsible,
     note: row.note ?? meta.note,
   };
