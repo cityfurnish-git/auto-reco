@@ -705,6 +705,52 @@ export function runReconciliation(
       }
     }
   }
+  // THE GUARD SAW IT LEAVE AND SAW IT COME BACK (owner, 22 Oct 2026).
+  //
+  // A unit only the gate log holds is normally the most alarming row in the
+  // system: one book claims a movement three others never saw. But where the
+  // GATE ITSELF holds both an inward and an outward for that unit on the same
+  // day, nothing left the site on balance — and the other three books being
+  // silent is then exactly right rather than a gap. There is no order, no
+  // delivery job and no stock move to find, because none was ever meant to
+  // exist.
+  //
+  // This is the same shape as the out-and-back rule above and deliberately
+  // separate from it: that one needs the ops sheet to say Not Delivered, so it
+  // cannot reach a unit the sheet never recorded at all. This one asks the gate
+  // alone, which is the only book that saw anything.
+  //
+  // Measured 2-21 Oct: of 22 "only the gate log has it" rows, 5 are a unit the
+  // guard scanned both ways on one day. The other 17 have a single leg and keep
+  // their place at the top of the queue.
+  {
+    const gateIn = new Set<string>();
+    const gateOut = new Set<string>();
+    for (const r of preFilter) {
+      if (r.source !== "PHYSICAL") continue;
+      (r.direction === "IN" ? gateIn : gateOut).add(canonicalize(r.barcode));
+    }
+    let bothWays = 0;
+    for (const canon of gateIn) {
+      if (!gateOut.has(canon)) continue;
+      // Only where the gate is genuinely the ONLY book. A unit any typed system
+      // also holds still reconciles normally — the point is the silence, not
+      // the round trip.
+      const elsewhere = preFilter.some(
+        (r) => r.source !== "PHYSICAL" && canonicalize(r.barcode) === canon
+      );
+      if (elsewhere) continue;
+      suppressed.add(`IN::${canon}`);
+      suppressed.add(`OUT::${canon}`);
+      bothWays++;
+    }
+    if (bothWays > 0) {
+      warnings.push(
+        `${bothWays} unit${bothWays === 1 ? "" : "s"} the guard scanned out and back in on the same day, with no other book involved — neither leg raised`
+      );
+    }
+  }
+
   // The rows for the one-way case, built from the sheet's own dispatch line
   // rather than a BarcodeView: the done-tasks-only rule has already taken this
   // unit out of reconciliation, so no view exists for the leg. Same shape the

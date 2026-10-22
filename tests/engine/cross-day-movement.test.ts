@@ -60,9 +60,24 @@ describe("same unit in and out today", () => {
     expect(crossRows(res)).toHaveLength(1);
   });
 
-  it("is still raised when only the gate has both legs", () => {
+  // SUPERSEDED BY A LATER RULE (owner, 22 Oct 2026), and the two must not be
+  // confused. This case — the gate holding both legs and NO other book holding
+  // the unit at all — is now suppressed upstream by the gate round-trip rule in
+  // run.ts: nothing left the site on balance, so there is no order, no delivery
+  // job and no stock move for anybody to confirm. See gate-round-trip.test.ts.
+  //
+  // The swap rule below is still what decides the cases where another book IS
+  // involved, which is why that test sits immediately after this one.
+  it("raises nothing when the gate alone holds both legs and no other book has it", () => {
     const res = run([
       sameDay("OUT", "PHYSICAL"), sameDay("IN", "PHYSICAL"),
+    ]);
+    expect(crossRows(res)).toHaveLength(0);
+  });
+
+  it("is still raised when the gate has both legs and another book is involved", () => {
+    const res = run([
+      sameDay("OUT", "PHYSICAL"), sameDay("IN", "PHYSICAL"), sameDay("OUT", "DT"),
     ]);
     expect(crossRows(res)).toHaveLength(1);
   });

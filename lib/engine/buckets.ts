@@ -181,10 +181,19 @@ export const VARIANCE_META: Record<string, VarianceMeta> = {
     responsible: "odoo_team",
     note: "Ops sheet + DT confirm the unit moved; Odoo hasn't posted yet. Expected lag, no stock action.",
   },
+  // REAL since 22 Oct 2026 (owner: "it needs to be in the sources").
+  //
+  // It was INFO on the strength of one unmeasured line — "the ops-sheet / DT
+  // gap is cosmetic" — with no date, no owner and no number behind it, unlike
+  // every other rule in this file. It is also the LARGEST single group in the
+  // system: 479 rows over 2-21 Oct, every one of them a unit the guard watched
+  // cross the gate and Odoo posted, which the ops sheet and the delivery app
+  // have never heard of. Two independent records against two silences is not
+  // cosmetic, and nobody was looking at any of it.
   [VARIANCE.GATE_ODOO_NO_OPS_DT]: {
-    bucket: "INFO",
+    bucket: "REAL",
     responsible: "ops_team",
-    note: "Gate register + Odoo already confirm the movement — the ops-sheet / DT gap is cosmetic.",
+    note: "The gate watched this unit move and Odoo posted it, but the ops sheet and the delivery app have no record of it. Add the sheet line and the app scan so every book carries the movement.",
   },
   [VARIANCE.FIELD_MISMATCH]: {
     bucket: "INFO",
@@ -273,6 +282,7 @@ const CHASE_PRIORITY: Record<string, Priority> = {
   // TWO BOOKS SHORT — two say it moved, two never saw it.
   [VARIANCE.GATE_OPS_NO_DT_ODOO]: "Medium",
   [VARIANCE.PICKUP_ODOO_OPEN]: "Medium",
+  [VARIANCE.GATE_ODOO_NO_OPS_DT]: "Medium",
 
   // ONE BOOK SHORT — three agree, so the movement is not in doubt and the gap
   // is a record somebody owns.
