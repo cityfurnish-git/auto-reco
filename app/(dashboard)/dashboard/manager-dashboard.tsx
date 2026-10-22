@@ -19,7 +19,7 @@ import type { Bucket, Priority, VarianceDB, VarianceStatus } from "@/lib/db/sche
 import CloseVarianceModal, { type ClosureReason } from "./close-variance-modal";
 import VarianceDetailModal from "./variance-detail-modal";
 import VarianceListModal, { type ListModalRequest } from "./variance-list-modal";
-import { isCityClosed } from "@/lib/engine/schedule";
+import { floorRowsOf, isCityClosed } from "@/lib/engine/schedule";
 import { addDays } from "@/lib/engine/dates";
 import { closedCaption, queueCaption, rateCaption, statFigure } from "@/lib/ui/stat-captions";
 import {
@@ -100,6 +100,22 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
   const cityAgg = useMemo(
     () => stats?.byCity.find((c) => c.city === city) ?? null,
     [stats, city]
+  );
+
+  // WAS THE WAREHOUSE SHUT, read the way the engine reads it: a configured
+  // closure the floor plainly worked through is a working day, so the notice
+  // below stays away. Four cities ran a full Thursday on 1 Oct 2026 that the
+  // calendar called a day off. See isCityClosed.
+  const shutToday = useMemo(
+    () =>
+      !!stats?.run &&
+      isCityClosed(
+        city,
+        stats.run.business_date,
+        stats.calendar,
+        cityAgg ? floorRowsOf(cityAgg.sources) : null
+      ),
+    [stats, city, cityAgg]
   );
 
   const filters: VarianceFilters = useMemo(
@@ -330,13 +346,13 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
       {/* Weekly-off notice on the off date itself; on the day BEFORE, the note
           is about the register schedule instead — the book is handed over after
           the holiday, so this board completes a day later than usual. */}
-      {stats?.run && (isCityClosed(city, stats.run.business_date, stats.calendar) ||
-        (!isCityClosed(city, stats.run.business_date, stats.calendar) &&
+      {stats?.run && (shutToday ||
+        (!shutToday &&
           isCityClosed(city, addDays(stats.run.business_date, 1), stats.calendar))) && (
         <div className="card p-4 flex items-center gap-3 border-l-[3px] border-l-border">
           <Icon name="event_busy" size={20} className="text-text-muted shrink-0" />
           <p className="text-sm text-text-secondary">
-            {isCityClosed(city, stats.run.business_date, stats.calendar) ? (
+            {shutToday ? (
               <>
                 <b>{stats.run.business_date}</b> was your day off — no gate register, ops sheet
                 or delivery-app entries are expected for this day.

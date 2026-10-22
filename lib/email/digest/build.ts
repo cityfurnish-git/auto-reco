@@ -3,6 +3,7 @@
 import { flaggedKeyOf } from "../followup/snapshot";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  floorRowsOf,
   isCityClosed,
   isCityOff,
   lastWorkingDay,
@@ -317,8 +318,28 @@ export async function buildDigestFromDb(
   // answer: every consumer falls back to WEEKLY_OFF_DAY.
   const calendar = await readWarehouseCalendarRows(db).catch(() => null);
 
+  // WAS THE WAREHOUSE SHUT, read the way the engine reads it: a configured
+  // closure the floor plainly worked through is a working day, so neither the
+  // register column nor the week-off badge may call it off. Four cities ran a
+  // full Thursday on 1 Oct 2026 that the calendar called a day off.
+  const shutOn = (city: string): boolean => {
+    const st = statByCity.get(city);
+    return isCityClosed(
+      city as City,
+      businessDate,
+      calendar,
+      st
+        ? floorRowsOf({
+            gate: { in: Number(st.phys_in ?? 0), out: Number(st.phys_out ?? 0) },
+            sheet: { in: Number(st.sheet_in ?? 0), out: Number(st.sheet_out ?? 0) },
+            dt: { in: Number(st.dt_in ?? 0), out: Number(st.dt_out ?? 0) },
+          })
+        : null
+    );
+  };
+
   const registerOf = (city: string): RegisterState => {
-    if (isCityClosed(city as City, businessDate, calendar)) return "off";
+    if (shutOn(city)) return "off";
     const statuses = uploadByCity.get(city) ?? [];
     // No upload, and this board's register is not even DUE tomorrow: the city
     // is shut in between (weekly off or holiday), so the book is handed over
@@ -369,7 +390,7 @@ export async function buildDigestFromDb(
       // closedPartOfWindow still exists and the dashboards still use it, where a
       // reader is looking at a single day in isolation and the half-closure
       // explains a number they can see.
-      weekOff: isCityClosed(city as City, businessDate, calendar) ? ("full" as const) : null,
+      weekOff: shutOn(city) ? ("full" as const) : null,
       topRisk: top ? { label: top[0], count: top[1].count, team: teamFor(top[1].name) } : null,
       counts:
         hasCounts && st

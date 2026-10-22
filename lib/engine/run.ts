@@ -18,7 +18,13 @@ import { detectDirectionConflicts } from "./direction-conflict";
 import { classify, duplicateHit } from "./ladder";
 import { filterOdooWindow } from "./odoo-window";
 import { utcToIstDate } from "../connectors/ist-window";
-import { isCityClosed, odooDeadlineMs, type ClosureCalendar } from "./schedule";
+import {
+  isCityClosed,
+  odooDeadlineMs,
+  OPEN_DAY_MIN_ROWS,
+  type ClosureCalendar,
+  type FloorActivity,
+} from "./schedule";
 import { computeSuppressions } from "./suppressions";
 import { isSpareJobType, isVendorJob, normalizeJobType, normalizeStatus } from "./util";
 import { grammarSuspect, isSummaryLine } from "./ocr-noise";
@@ -448,7 +454,24 @@ export function runReconciliation(
   // Odoo record CREATED that day is data entry about another day's movement —
   // never a same-day REAL. (Floor rows appearing on an off day still run the
   // normal ladder: activity on a closed day is exactly what should surface.)
-  const offDay = isCityClosed(city, runDate, calendar);
+  // WHAT THIS CITY'S FLOOR DID TODAY. isCityClosed uses it to overrule a
+  // configured closure that the floor plainly worked through — see its header
+  // for the twelve October city-days where the two disagreed, and for why
+  // silence is never read the other way.
+  const floorToday: FloorActivity = {
+    rows: preFilter.filter(
+      (r) => r.source === "PHYSICAL" || r.source === "SHEET" || r.source === "DT"
+    ).length,
+  };
+  const offDay = isCityClosed(city, runDate, calendar, floorToday);
+  // SAY WHEN THE FLOOR OVERRULED THE CALENDAR, because the day then grades as a
+  // working day and someone reading the digest needs to know the configured
+  // closure was ignored on purpose rather than lost.
+  if (!offDay && isCityClosed(city, runDate, calendar)) {
+    warnings.push(
+      `${city} is configured closed on ${runDate}, but its floor booked ${floorToday.rows} rows — read as a working day.`
+    );
+  }
   if (offDay) {
     warnings.push(
       `${city} weekly off (${runDate}) — floor sources are expected absent; Odoo-only rows cannot be same-day REAL.`

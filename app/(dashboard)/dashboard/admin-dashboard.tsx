@@ -32,7 +32,7 @@ import { errText, useToast } from "@/components/toast";
 import CloseVarianceModal from "./close-variance-modal";
 import VarianceDetailModal from "./variance-detail-modal";
 import VarianceListModal, { type ListModalRequest } from "./variance-list-modal";
-import { isCityClosed } from "@/lib/engine/schedule";
+import { floorRowsOf, isCityClosed } from "@/lib/engine/schedule";
 import { addDays } from "@/lib/engine/dates";
 // closedCaption / queueCaption went with the KPI tiles — the one-line strip has
 // no room for a sentence under each figure. Still used by the manager dashboard.
@@ -524,7 +524,13 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
               // isCityClosed then falls back to the hardcoded Thursday map, so
               // this line is correct on every vintage of database.
               const bd = stats.run?.business_date ?? "";
-              const off = bd !== "" && isCityClosed(c.city as City, bd, stats.calendar);
+              // READ THE DAY THE WAY THE ENGINE DOES. A configured closure the
+              // floor plainly worked through is a working day, so no OFF badge:
+              // four cities ran a full Thursday on 1 Oct 2026 that the calendar
+              // called a day off. See isCityClosed.
+              const off =
+                bd !== "" &&
+                isCityClosed(c.city as City, bd, stats.calendar, floorRowsOf(c.sources));
               const isHoliday = off && !!stats.calendar?.holidays?.[c.city]?.includes(bd);
               // The day BEFORE a closure: the city works this whole board, but
               // its guard register is handed over AFTER the day off — the book

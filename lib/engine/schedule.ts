@@ -81,11 +81,91 @@ export function odooDeadlineMs(
   return Date.parse(`${d}T15:00:00+05:30`);
 }
 
+/**
+ * WHAT THE FLOOR ACTUALLY DID, when we can see it.
+ *
+ * Owner, 22 Oct 2026: "take this status for any warehouse operating on a day or
+ * not from the DT, and not our set days — lately the ops are a little volatile,
+ * warehouses are operating without a proper structure."
+ *
+ * Measured over 1-21 Oct, 105 city-days: the configured calendar and the floor
+ * disagreed on TWELVE of them. Four cities ran a full Thursday on 1 Oct with
+ * the calendar calling it a day off (Delhi alone: 154 tracker, 172 sheet, 153
+ * gate). A rule derived from what the warehouse DID beats one derived from what
+ * it was supposed to do.
+ *
+ * NOT THE TRACKER ALONE, which was the owner's first instruction and would have
+ * got the most important day wrong: on 8 Oct Delhi the Tracker held 2 rows and
+ * the ops sheet held 300. Any floor book counts.
+ *
+ * THE THRESHOLD IS NOT FUSSINESS. Mumbai carried exactly one tracker row on
+ * 2 Oct, a declared holiday — a straggler filed against a shut warehouse. One
+ * or two rows is noise; five is a warehouse.
+ *
+ * IT MOVES THE ANSWER ONE WAY ONLY, and that is the whole safeguard. Volume on
+ * a day is proof the warehouse worked it. SILENCE IS NOT PROOF OF THE REVERSE,
+ * because the engine cannot tell a book that read the city and found it empty
+ * from one that never read the city at all: `reported` means "connector ok AND
+ * at least one row", so zero rows and "the book reported" are mutually
+ * exclusive by construction. Over the same three weeks, 0 of 715 stored
+ * city-day snapshots had a floor book reporting against zero floor rows, and
+ * all 98 silent ones had no floor book reporting at all.
+ *
+ * Reading those silent days as closed would also buy almost nothing. Across the
+ * twelve genuinely silent city-days the engine raised 3 REAL rows and 0 chase
+ * items in total, because the rule that a non-reporting source is never blamed
+ * already covers them. So a day the calendar calls open and the floor spent
+ * silent stays open here, and the Tracker's twenty-day outage cannot be
+ * mistaken for twenty closures.
+ */
+export const OPEN_DAY_MIN_ROWS = 5;
+
+export interface FloorActivity {
+  /** Floor rows seen for this city on this date, across every floor book. */
+  rows: number;
+}
+
+/**
+ * Floor rows for a city-day, from the per-source counts every caller already
+ * holds — the dashboards' CityAgg.sources, the digest's stored snapshot.
+ *
+ * ONE READING OF A DAY, used everywhere. The header above explains why the
+ * engine overrules a configured closure the floor worked through; the OFF badge
+ * on the dashboards and the digest's "off" label have to agree with it, or the
+ * board says a warehouse was shut on a day the engine graded as working.
+ */
+export function floorRowsOf(
+  counts: Partial<
+    Record<"gate" | "sheet" | "dt", { in?: number | null; out?: number | null }>
+  >
+): FloorActivity {
+  const n = (v?: number | null) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  const books = [counts.gate, counts.sheet, counts.dt];
+  return { rows: books.reduce((t, b) => t + n(b?.in) + n(b?.out), 0) };
+}
+
 export function isCityClosed(
   city: City,
   businessDate: string,
-  cal?: ClosureCalendar | null
+  cal?: ClosureCalendar | null,
+  /**
+   * What the floor did on this date, where it is known. Supplied by the engine
+   * for the day being reconciled; absent for any date we cannot observe — a
+   * future day, which is exactly what the Odoo deadline has to look at, and
+   * where the calendar is still the only thing that can answer.
+   */
+  observed?: FloorActivity | null
 ): boolean {
+  // OBSERVED VOLUME BEATS A CONFIGURED CLOSURE — in that direction only.
+  //
+  // A day with real volume on it was worked, whatever the calendar says, and
+  // the engine must stop expecting nothing of it. Below the threshold the floor
+  // is not saying anything clear enough to overrule a configured day: Mumbai's
+  // single tracker row on the 2 Oct holiday is that band, and so is every small
+  // fixture in the test suite. Silence never speaks here at all — see the
+  // header for the measurement behind that.
+  if (observed && observed.rows >= OPEN_DAY_MIN_ROWS) return false;
+
   const wd = weekdayOf(businessDate);
   if (wd === null) return false;
   if (cal?.holidays?.[city]?.includes(businessDate)) return true;
