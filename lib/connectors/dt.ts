@@ -22,7 +22,7 @@ import { normalizeCity } from "./types";
 import { dayToUtcWindow, istDayToUtcWindow, usesCalendarDay } from "./ist-window";
 import { deriveDtDirection } from "./dt-mapping";
 
-const DT_PARENT_COLLECTION = process.env.DT_TASKS_COLLECTION ?? "deliveries";
+
 /** One row per delivery ATTEMPT, with a date that never moves. See the pull. */
 const DT_TRIPS_COLLECTION = process.env.DT_TRIPS_COLLECTION ?? "trips";
 
@@ -267,7 +267,7 @@ export const dtConnector: Connector = {
       ];
 
       const rows: CityTaggedRow[] = [];
-      for (const doc of await dt.aggregate(DT_PARENT_COLLECTION, pipeline)) {
+      for (const doc of await dt.aggregate(dt.parentCollection, pipeline)) {
 
         const city = normalizeCity(doc.city);
         const barcode = str(doc.barcode);

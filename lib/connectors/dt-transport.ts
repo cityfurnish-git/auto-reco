@@ -1,66 +1,73 @@
 // Two ways to read the Delivery Tracker, behind one interface.
 //
-// WHY THERE ARE TWO (13 Oct 2026). The connector talked straight to the
-// Tracker's MongoDB from the day it was written. On 2 October that stopped:
-// every run since logs `connect ETIMEDOUT 52.140.171.219:27017`, and a raw TCP
-// probe shows the packets silently dropped rather than refused — the signature
-// of an IP allow-list, not a dead server. The Tracker's own app kept working
-// throughout, because it connects a different way. Eleven days of
-// reconciliation ran against Odoo alone before anyone noticed, which is its own
-// lesson about the nightly digest being dead.
+// WHY THERE ARE TWO (13-22 Oct 2026). The reconciliation connector talked
+// straight to the Tracker's MongoDB from the day it was written. On 2 October
+// that stopped: every run since logs `connect ETIMEDOUT 52.140.171.219:27017`,
+// and a raw TCP probe shows the packets silently dropped rather than refused —
+// the signature of an IP allow-list, not a dead server. Twenty days of
+// reconciliation ran on three books instead of four before it was spotted,
+// which is its own argument for fixing the nightly digest.
 //
-// Metabase is already connected to that same database ("Delivery Tracker
-// MongoDB", id 6) and reads it fine, so it is the way back in that needs
-// nobody's permission. scripts/metabase-mongo.mjs proved the mechanism months
-// ago and was never wired into the connector; this is that wiring.
+// THE OTHER ROAD WAS ALREADY IN THIS CODEBASE, which is the part worth knowing.
+// lib/gate/fleet.ts, expected-dt.ts and enrich.ts have always read the Tracker
+// through Metabase (runMongoPipeline, database METABASE_DT_DB_ID), and they
+// kept working right through the outage — it is why gate scans still get their
+// customer names. Only the reconciliation connector went direct. The codebase
+// has been reading one system two ways, from two places, for months.
 //
-// THE DIRECT PATH IS KEPT, not deleted. It is faster, it has no row cap, and
-// the allow-list is worth fixing anyway — DT_TRANSPORT=mongo switches back the
-// moment it is.
+// AND THEY ARE THE SAME DATA. Checked against the gate — guards scanning real
+// units, a witness independent of both — on three September days in Delhi:
 //
-// WHAT METABASE CHANGES, and each of these is a trap:
+//               gate   direct   agrees    metabase  agrees   the two agree
+//   26 Sep       124      104    94 76%        97    92 74%       97 of 104
+//   29 Sep       102      101    86 84%        98    87 85%       97 of 101
+//   01 Oct       150      137   132 88%       126   115 77%      117 of 137
 //
-//   ROW CAP. /api/dataset stops at 2,000 rows and says so with `rows_truncated`.
-//   A day is normally far below that (366 deliveries and 296 attempted jobs on
-//   10 Oct), but "normally" is not a guarantee and a silent 2,000-row ceiling
-//   would reconcile the day against part of the Tracker while looking complete.
-//   So every aggregate pages, and a page that comes back truncated AND unpaged
-//   throws rather than returns.
+// An earlier comparison of mine put the two sources 30% apart and was WRONG:
+// it joined on the city label, and the stored data says DELHI where the Tracker
+// says Gurgaon. Every Delhi row failed to match on its name alone, and Delhi is
+// about a third of daily volume — the "mismatch" was precisely that bug. What
+// is left is 10-15%, which is what frozen September rows read against a live
+// Tracker should look like: it rewrites its own rows as jobs are retried, which
+// is why lib/reconcile/freeze.ts exists.
 //
-//   SHAPES, NOT DOCUMENTS. Metabase answers with columns and tuples, so rows
-//   are rebuilt into documents here. Our pipelines end in a flat $project,
-//   which is what makes that safe.
+// WHAT METABASE NEEDS THAT THE DRIVER DID NOT:
 //
-//   NO DRIVER TYPES. A Date must travel as {$date}, an ObjectId as {$oid};
-//   JSON.stringify would otherwise send a Date as a bare ISO string that Mongo
-//   compares as text and matches nothing — a filter that silently returns zero
-//   rows, which is the worst failure this file could have.
+//   A DIFFERENT COLLECTION NAME. The two roads lead to differently-named
+//   collections, so the transport owns that name rather than the caller.
+//
+//   NO DRIVER TYPES. A Date must travel as {$date}; JSON.stringify would send a
+//   bare ISO string that Mongo compares as TEXT and matches nothing — a filter
+//   that silently returns zero rows, the worst failure this file could have.
+//   The gate pipelines write {$date} literals by hand; here the pipelines are
+//   shared with the driver path, so the conversion happens on the way out.
 //
 //   NO distinct(). It is not an aggregation stage, so it becomes $group.
+//
+// Row limits are NOT handled here: runMongoPipeline already asks Metabase for
+// up to 100,000 rows. An earlier version of this file paged around a 2,000-row
+// cap that only existed because it called the API without those constraints.
 
 import { MongoClient } from "mongodb";
+import { metabaseConfigured, runMongoPipeline } from "./metabase";
 
 export interface DtTransport {
   readonly kind: "mongo" | "metabase";
+  /** The main delivery-task collection on THIS road. They differ. */
+  readonly parentCollection: string;
   /** Distinct values of `field`, as something safe to put in an `$in`. */
   distinctIds(collection: string, field: string, match: Record<string, unknown>): Promise<unknown[]>;
   aggregate(collection: string, pipeline: unknown[]): Promise<Record<string, unknown>[]>;
   close(): Promise<void>;
 }
 
-/** Metabase's own ceiling. Paged around; never assumed to be enough. */
-export const METABASE_ROW_CAP = 2000;
-/** Refuses to page for ever if a pipeline is wider than anyone expected. */
-export const MAX_PAGES = 40;
-
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
 
 /**
  * JS values to MongoDB Extended JSON, for the trip through Metabase.
  *
- * Only Dates need rewriting; everything else is already JSON. An ObjectId from
- * the driver would too, but on this path ids arrive as {$oid} already (see
- * distinctIds) and pass straight through.
+ * Only Dates need rewriting; everything else is already JSON. Ids arrive as
+ * {$oid} from distinctIds and pass straight through.
  */
 export function toExtendedJson(value: unknown): unknown {
   if (value instanceof Date) return { $date: value.toISOString() };
@@ -74,68 +81,27 @@ export function toExtendedJson(value: unknown): unknown {
 }
 
 function metabaseTransport(): DtTransport {
-  const base = (process.env.METABASE_URL ?? "").replace(/\/+$/, "");
-  const key = process.env.METABASE_API_KEY;
   const dbId = Number(process.env.METABASE_DT_DB_ID ?? 6);
-  if (!base || !key) throw new Error("DT via Metabase needs METABASE_URL and METABASE_API_KEY.");
+  // The standard name, and the one lib/gate/* has always used against this
+  // database. Overridable for the same reason every other collection name is.
+  const parent = process.env.METABASE_DT_PARENT ?? "deliveries";
 
-  async function run(collection: string, pipeline: unknown[]) {
-    const res = await fetch(`${base}/api/dataset`, {
-      method: "POST",
-      headers: { "x-api-key": key!, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        database: dbId,
-        type: "native",
-        native: { collection, query: JSON.stringify(toExtendedJson(pipeline)) },
-      }),
-    });
-    const json = await res.json();
-    if (json?.status === "failed" || json?.error) {
-      throw new Error(`DT via Metabase: ${String(json.error ?? json.error_type ?? "query failed").slice(0, 300)}`);
-    }
-    const cols: string[] = (json?.data?.cols ?? []).map((c: { name: string }) => c.name);
-    const rows: unknown[][] = json?.data?.rows ?? [];
-    return {
-      docs: rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]]))),
-      truncated: !!json?.data?.rows_truncated,
-    };
-  }
-
-  /** Page a pipeline past the row cap, $skip at a time. */
-  async function paged(collection: string, pipeline: unknown[]) {
-    const out: Record<string, unknown>[] = [];
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const { docs } = await run(collection, [
-        ...pipeline,
-        { $skip: page * METABASE_ROW_CAP },
-        { $limit: METABASE_ROW_CAP },
-      ]);
-      out.push(...docs);
-      // A short page is the end of the data. A full one might not be, so ask
-      // again — one wasted round trip on an exact multiple is the right price
-      // for never guessing.
-      if (docs.length < METABASE_ROW_CAP) return out;
-    }
-    throw new Error(
-      `DT via Metabase: ${collection} still returning rows after ${MAX_PAGES} pages ` +
-        `(${MAX_PAGES * METABASE_ROW_CAP} rows). Refusing to continue rather than reconcile a partial day.`
-    );
-  }
+  const run = async (collection: string, pipeline: unknown[]) =>
+    (await runMongoPipeline(dbId, collection, toExtendedJson(pipeline) as unknown[])).rows;
 
   return {
     kind: "metabase",
+    parentCollection: parent,
     async distinctIds(collection, field, match) {
-      const docs = await paged(collection, [{ $match: match }, { $group: { _id: `$${field}` } }]);
+      const docs = await run(collection, [{ $match: match }, { $group: { _id: `$${field}` } }]);
       return docs
         .map((d) => d._id)
         .filter((v) => v != null)
-        // Back into something an $in on an ObjectId column will match. A value
+        // Back into something an $in on an ObjectId column matches. A value
         // that is not an id shape is left alone rather than coerced.
         .map((v) => (typeof v === "string" && OBJECT_ID.test(v) ? { $oid: v } : v));
     },
-    async aggregate(collection, pipeline) {
-      return paged(collection, pipeline);
-    },
+    aggregate: run,
     async close() {},
   };
 }
@@ -145,6 +111,7 @@ function mongoTransport(uri: string, dbName: string): DtTransport {
   const ready = client.connect();
   return {
     kind: "mongo",
+    parentCollection: process.env.DT_TASKS_COLLECTION ?? "deliveries",
     async distinctIds(collection, field, match) {
       const db = (await ready).db(dbName);
       return db.collection(collection).distinct(field, match);
@@ -165,26 +132,16 @@ function mongoTransport(uri: string, dbName: string): DtTransport {
 /**
  * Which road to take.
  *
- * THE DIRECT CONNECTION REMAINS THE DEFAULT, and that is the whole point of
- * this paragraph. Metabase CAN read a Delivery Tracker database, and this
- * transport works — but measured on 13 Oct 2026 it is NOT THE SAME DATABASE
- * the connector has always read:
+ * Metabase by default since 22 Oct 2026: the direct connection is blocked, the
+ * Metabase road is what the gate half of this codebase has always used, and the
+ * two were checked against the gate's own record before the default moved.
+ * DT_TRANSPORT=mongo pins the old road back the day the allow-list is fixed,
+ * without a deploy — it is faster and has no API in front of it, so it is worth
+ * having back.
  *
- *   * the parent collection the connector names does not exist there at all
- *     (the trips collection does, which is what made it look plausible);
- *   * against `deliveries`, the nearest equivalent, the volumes match almost
- *     exactly — 438 units against 440 on 29 Sep, 441 against 449 on 1 Oct —
- *     but only 73% and 68% of them are THE SAME UNITS. Each side holds about
- *     a hundred the other does not.
- *
- * Matching totals over different contents is the most dangerous shape a data
- * source can have: every count on the dashboard would look right. So Metabase
- * is opt-in by DT_TRANSPORT=metabase and nothing selects it on its own, until
- * somebody confirms which database Metabase's connection actually points at.
- *
- * Deliberately NOT "try direct, fall back" either: the direct failure is a
- * thirty-second connect timeout, and spending half of a sixty-second function
- * budget rediscovering that is how a working run turns into a partial one.
+ * Deliberately NOT "try direct, fall back": the direct failure is a thirty-
+ * second connect timeout, and spending half of a sixty-second function budget
+ * rediscovering that is how a working run turns into a partial one.
  */
 export function dtTransport(): DtTransport {
   const pinned = (process.env.DT_TRANSPORT ?? "").trim().toLowerCase();
@@ -197,6 +154,7 @@ export function dtTransport(): DtTransport {
   }
   if (pinned === "metabase") return metabaseTransport();
 
+  if (metabaseConfigured()) return metabaseTransport();
   if (uri) return mongoTransport(uri, dbName);
-  throw new Error("DT not configured (set DT_MONGODB_URI, or DT_TRANSPORT=metabase once its database is confirmed).");
+  throw new Error("DT not configured (set METABASE_URL + METABASE_API_KEY, or DT_MONGODB_URI).");
 }
