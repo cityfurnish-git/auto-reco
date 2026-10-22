@@ -42,7 +42,7 @@ export const FLAG_HINT: Record<VarianceFlag, string> = {
   "ODOO PENDING": "Odoo's window for this day is still open (3pm on the next day the warehouse opens) — the entry may still be posted.",
   "VENDOR RECEIPT": "A vendor / PO receipt. These never go through the Delivery Tracker, so its absence there is expected.",
   "NOT DELIVERED": "The sheet says Not Delivered or the tracker says Not Done — the goods went out and came back.",
-  "GUARD OFF-SHIFT": "No guard was signed in at this gate at any time that day, so Guard Check could not record it.",
+  "GUARD OFF-SHIFT": "No guard was signed in at this gate at any time that day, so Guard could not record it.",
   "ATTEMPT — COMPLETED LATER": "The Delivery Tracker recorded an attempt on this day and closed the job on a later date — often a van that went out and came back empty. It is the only book claiming this movement today.",
 };
 

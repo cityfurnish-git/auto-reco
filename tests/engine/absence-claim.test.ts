@@ -9,7 +9,12 @@
 // the unit. The correct gate fires on 55. That gap is what these tests defend.
 
 import { describe, expect, it } from "vitest";
-import { ABSENCE_CLAIM, absenceClaim, absenceContradicted } from "../../lib/engine/absence-claim";
+import {
+  ABSENCE_CLAIM,
+  absenceClaim,
+  absenceContradicted,
+  type SourceKey,
+} from "../../lib/engine/absence-claim";
 import { VARIANCE } from "../../lib/engine/variance-names";
 import { varianceSource } from "../../lib/engine/variance-source";
 
@@ -40,25 +45,48 @@ describe("the table covers every name, and only real names", () => {
 
   it("never claims a source the name's own text does not accuse", () => {
     // The table is prose turned into flags, so it can be checked against the
-    // prose — but only against the RIGHT HALF of it. Every name mentions each
-    // source it involves, as a confirming book as often as an absent one, so
-    // matching the whole string passes on anything: "Gate + Ops Confirm — No DT
-    // Scan" contains "Gate" because the gate register CONFIRMED it.
+    // prose — but only against the half of it that talks about an ABSENCE.
+    // Every name mentions each book it involves, as a confirming book as often
+    // as an absent one, so matching the whole string passes on anything.
     //
-    // These names are all "<who confirms> — <what is missing>", so the claim
-    // must be justified by the text after the em-dash. Adding "P" to GATE_ONLY —
-    // the exact mutation this test exists to catch — passes a whole-string match
-    // and fails this one.
-    const mentions: Record<string, RegExp> = {
-      P: /gate|floor/i,
-      S: /ops|sheet|floor/i,
+    // The names were rewritten on 22 Oct 2026 and the grammar INVERTED: the
+    // missing thing is now said first, because that is what a reader acts on.
+    // So the half to check moved from after the em-dash to before it — "No DT
+    // job — the other three agree" claims D on the strength of its opening.
+    //
+    // The "Only X" family carries no absence words at all: it names the one
+    // book that DID record the unit and leaves the rest implied. For those the
+    // claim must be exactly the other three, which is a stricter check than any
+    // text match — adding "P" to GATE_ONLY cannot survive it.
+    const mentions: Record<SourceKey, RegExp> = {
+      P: /guard|floor/i,
+      S: /\bMS\b|floor/i,
       D: /\bDT\b/i,
       O: /odoo/i,
     };
+    const ALL_KEYS: SourceKey[] = ["P", "S", "D", "O"];
+    const BOOK_OF: [RegExp, SourceKey][] = [
+      [/^only the guard\b/i, "P"],
+      [/^only MS\b/i, "S"],
+      [/^only DT\b/i, "D"],
+      [/^only odoo\b/i, "O"],
+    ];
+
     for (const [name, claimed] of Object.entries(ABSENCE_CLAIM)) {
       if (claimed.length === 0) continue;
-      const absencePart = name.split("—").slice(1).join("—");
-      expect(absencePart, `${name} has no "— what is missing" half to check`).not.toBe("");
+
+      const only = BOOK_OF.find(([re]) => re.test(name));
+      if (only) {
+        const [, held] = only;
+        expect(
+          [...claimed].sort(),
+          `${name} records the one book that HAS it, so its claim must be the other three`
+        ).toEqual(ALL_KEYS.filter((k) => k !== held).sort());
+        continue;
+      }
+
+      const absencePart = name.split("—")[0];
+      expect(absencePart, `${name} has no "what is missing" half to check`).not.toBe("");
       for (const key of claimed) {
         expect(
           mentions[key].test(absencePart),
@@ -69,16 +97,25 @@ describe("the table covers every name, and only real names", () => {
   });
 
   it("that guard actually bites — the mutation it was written for fails it", () => {
-    // Guards this test against itself. If someone reverts the em-dash split, a
-    // whole-string match makes every one of these pass and the guard dies quiet.
-    const mentions: Record<string, RegExp> = { P: /gate|floor/i, S: /ops|sheet|floor/i, D: /\bDT\b/i, O: /odoo/i };
-    const absenceHalf = (n: string) => n.split("—").slice(1).join("—");
-    // "Gate Register Only — No Ops / DT / Odoo Record" must not accuse the gate.
-    expect(mentions.P.test(VARIANCE.GATE_ONLY)).toBe(true); // whole string: useless
-    expect(mentions.P.test(absenceHalf(VARIANCE.GATE_ONLY))).toBe(false); // absence half: catches it
-    // Same for the other two of the family.
-    expect(mentions.S.test(absenceHalf(VARIANCE.SHEET_ONLY))).toBe(false);
-    expect(mentions.D.test(absenceHalf(VARIANCE.DT_ONLY))).toBe(false);
+    // Guards this test against itself. If someone reverts the split and matches
+    // the whole string, every one of these passes and the guard dies quiet.
+    const mentions: Record<string, RegExp> = {
+      P: /guard|floor/i, S: /\bMS\b|floor/i, D: /\bDT\b/i, O: /odoo/i,
+    };
+    const absenceHalf = (n: string) => n.split("—")[0];
+
+    // "No Guard scan — MS and Odoo saw it" names the Guard in its ABSENCE half,
+    // which is the shape the text check relies on.
+    expect(mentions.P.test(absenceHalf(VARIANCE.OPS_ODOO_NO_GATE))).toBe(true);
+    // ...and does not name the books that confirmed it.
+    expect(mentions.S.test(absenceHalf(VARIANCE.OPS_ODOO_NO_GATE))).toBe(false);
+    expect(mentions.O.test(absenceHalf(VARIANCE.OPS_ODOO_NO_GATE))).toBe(false);
+
+    // The *_ONLY family has no absence half at all, which is exactly why it is
+    // checked by complement instead of by text.
+    expect(absenceHalf(VARIANCE.GATE_ONLY)).toBe(VARIANCE.GATE_ONLY);
+    expect(mentions.P.test(VARIANCE.GATE_ONLY)).toBe(true); // text match: useless here
+    expect(absenceClaim(VARIANCE.GATE_ONLY)).not.toContain("P"); // complement: catches it
   });
 
   it("returns nothing for a name nobody has reasoned about", () => {

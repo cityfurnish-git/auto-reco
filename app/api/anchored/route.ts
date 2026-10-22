@@ -127,10 +127,10 @@ export const GET = jsonRoute("anchored", async (req: NextRequest) => {
       customer: (r.customer as string) ?? null,
       product: (r.product as string) ?? null,
       seenBy: [
-        r.present_p ? "Guard Check" : null,
+        r.present_p ? "Guard" : null,
         (truth ? r.odoo_same_day : r.present_o) ? "Odoo" : null,
-        r.present_s ? "Manual Sheet" : null,
-        r.present_d ? "Delivery Tracker" : null,
+        r.present_s ? "MS" : null,
+        r.present_d ? "DT" : null,
       ].filter(Boolean).join(", "),
     })),
     total: rows.length,

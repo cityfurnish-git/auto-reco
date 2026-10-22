@@ -23,7 +23,7 @@ import {
 const FALLBACK: Help = {
   title: "Reconciliation Portal",
   blurb:
-    "The Cityfurnish warehouse auto-reconciliation portal — it cross-checks every barcode movement across the guard register, ops sheet, Delivery Tracker, and Odoo.",
+    "The Cityfurnish warehouse auto-reconciliation portal — it cross-checks every barcode movement across four books: Guard, MS, DT and Odoo.",
   points: [
     "Use the left navigation to move between the dashboard, uploads, leaderboard, and reports.",
     "Each page has its own help — open this button anywhere for a quick explanation.",

@@ -651,8 +651,8 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
                 </th>
                 <SortHeader label="Barcode" sortKey="barcode" state={sort} onSort={applySort} className="col-pin col-pin-2" />
                 {/* Same columns as the admin table: one per book, did it record this unit? */}
-                <th className="text-center w-[76px]" title="Guard Check">Guard</th>
-                <th className="text-center w-[76px]" title="Manual Sheet">Sheet</th>
+                <th className="text-center w-[76px]" title="Guard — the gate app">Guard</th>
+                <th className="text-center w-[76px]" title="MS — the movement sheet">MS</th>
                 <th className="text-center w-[76px]" title="Delivery Tracker">Tracker</th>
                 <th className="text-center w-[76px]" title="Odoo">Odoo</th>
                 <SortHeader label="Problem" sortKey="variance" state={sort} onSort={applySort} />

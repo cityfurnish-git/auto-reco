@@ -65,10 +65,22 @@ export function normalizeStatus(raw: string | undefined | null): NormStatus {
 }
 
 // Uppercased job type; blank → null.
+//
+// AND ONE SPELLING FOLDED, because the movement sheet's Ops Type is typed by
+// hand and one transposition outnumbers the correct spelling. Measured on
+// October 2026's sheet rows: "PO Inward" in five casings (295 + 208 + 44 + 10 +
+// 5), "PO Inwards" twice — and "Po Inwrad" 244 times. isVendorJob() tested the
+// exact string, so a quarter of every month's vendor receipts missed the
+// vendor-receipt rule and were chased as missing DT jobs: 151 chase items in
+// Delhi in October alone, all of them a letter swap rather than a lost unit.
+//
+// Folded HERE rather than only in isVendorJob so the stored value is clean too
+// — the Ops Type column on the dashboard was splitting one job into two.
 export function normalizeJobType(raw: string | undefined | null): string | null {
   if (!raw) return null;
   const s = raw.toString().trim().toUpperCase().replace(/[\s-]+/g, "_");
-  return s || null;
+  if (!s) return null;
+  return /^PO_INW(AR|RA)DS?$/.test(s) ? "PO_INWARD" : s;
 }
 
 export function isRepair(jobType: string | null): boolean {
@@ -106,11 +118,18 @@ export function blank(v: string | undefined | null): boolean {
 // Spare/Consumable INFO row, not a REAL "no trail" variance, even when the
 // barcode text itself doesn't say "spare". CONSUM matches the common
 // misspelling; REFURB+MAT avoids catching a refurbished rental *unit*.
-/** PO_INWARD is how every source's "PO inward" / vendor job type is normalised. */
+/**
+ * PO_INWARD is how every source's "PO inward" / vendor job type is normalised.
+ *
+ * STILL TOLERANT OF THE MISSPELLINGS normalizeJobType now folds, because rows
+ * stored before that fix keep the spelling they were written with — 240 of
+ * Delhi's October rows say PO_INWRAD — and a re-check of an old day must grade
+ * them the same way as a fresh one.
+ */
 export function isVendorJob(jobType: string | null | undefined): boolean {
   const j = (jobType ?? "").toUpperCase().replace(/[\s-]+/g, "_");
   // Not every "PO_…": "PO Payment" is a money job, not a receipt.
-  return j === "PO_INWARD" || j.includes("VENDOR");
+  return /^PO_INW(AR|RA)DS?$/.test(j) || j.includes("VENDOR");
 }
 
 export function isSpareJobType(jobType: string | undefined | null): boolean {

@@ -22,6 +22,7 @@
 // dates=all.
 
 import { NextResponse, type NextRequest } from "next/server";
+import { searchAliases } from "@/lib/ui/variance-labels";
 import { jsonRoute } from "@/lib/api/json-route";
 import { attachFlags } from "@/lib/variances/attach-flags";
 import { createClient } from "@/lib/supabase/server";
@@ -180,6 +181,14 @@ export const GET = jsonRoute("variances", async (req: NextRequest) => {
             `so_number.ilike.%${safe}%`,
             `product.ilike.%${safe}%`,
             `customer.ilike.%${safe}%`,
+            // THE NAME ITSELF, under either spelling. The names were rewritten
+            // in plain words on 22 Oct 2026 and migration 0051 rewrote the
+            // stored rows, so typing a name off an older screenshot, email or
+            // export would otherwise match nothing and read as "that never
+            // happened". searchAliases turns an old spelling into the current
+            // name before the query goes out.
+            `variance_name.ilike.%${safe}%`,
+            ...searchAliases(safe).map((n) => `variance_name.eq.${n.replace(/,/g, " ")}`),
           ].join(",")
         );
       }

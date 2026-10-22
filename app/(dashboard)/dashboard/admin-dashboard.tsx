@@ -926,8 +926,8 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
                 <SortHeader label="Barcode" sortKey="barcode" state={sort} onSort={applySort} className="col-pin col-pin-2" />
                 {/* One column per book: did it record this unit? The whole
                     story of a variance at a glance, before its name. */}
-                <th className="text-center w-[76px]" title="Guard Check">Guard</th>
-                <th className="text-center w-[76px]" title="Manual Sheet">Sheet</th>
+                <th className="text-center w-[76px]" title="Guard — the gate app">Guard</th>
+                <th className="text-center w-[76px]" title="MS — the movement sheet">MS</th>
                 <th className="text-center w-[76px]" title="Delivery Tracker">Tracker</th>
                 <th className="text-center w-[76px]" title="Odoo">Odoo</th>
                 <SortHeader label="Problem" sortKey="variance" state={sort} onSort={applySort} />

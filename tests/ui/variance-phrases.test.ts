@@ -14,9 +14,9 @@ import { labelFor, UNLABELLED } from "../../lib/ui/variance-labels";
 import { SOURCE_LABEL, SOURCE_NAME, sourceLabel } from "../../lib/ui/source-names";
 
 /**
- * Names produced by no current code path, still on stored rows. Measured in
- * production on 15 Sep 2026 — 30 distinct spellings across 4,000+ rows, of
- * which these six predate the current engine. They are phrased so an old row
+ * Names produced by no current code path, still on stored rows. Re-measured on
+ * 22 Oct 2026: 38 distinct spellings across 36,647 rows, of which these nine
+ * predate the names migration 0051 rewrote. They are phrased so an old row
  * reads like a current one; a rename of the constants could never do that,
  * which is the argument for the whole display-layer approach.
  */
@@ -28,6 +28,10 @@ const OBSOLETE_BUT_STORED = [
   "Sheet-Only Dispatch — No Trail",
   "DT-Only — Fake Scan Risk",
   "Duplicate Scan / Multi-Source Mismatch",
+  // Added 22 Oct 2026: one row each, never phrased until the rename migration's
+  // own test went looking for the gap.
+  "Physical + Odoo Agree — No Register/DT",
+  "All-Source Field Mismatch",
 ];
 
 describe("every variance a person can see has a phrase", () => {
@@ -61,7 +65,14 @@ describe("every variance a person can see has a phrase", () => {
 describe("the retired vocabulary never comes back", () => {
   // The words these four replaced. A phrase containing one means the screen is
   // back to naming the same book two ways.
-  const RETIRED = ["Ops Sheet", "Ops sheet", "Gate Register", "Gate register", "Delivery app", "Physical"];
+  // Updated 22 Oct 2026: the owner asked for "Guard" and "DT", and gave the
+  // four books as Odoo / Guard / DT / MS. The spelled-out names chosen on
+  // 15 Sep join the retired list — they were written for a reader who had never
+  // seen the tool, and are not what the warehouse says out loud.
+  const RETIRED = [
+    "Ops Sheet", "Ops sheet", "Gate Register", "Gate register", "Delivery app",
+    "Physical", "Manual Sheet", "Delivery Tracker", "Guard Check",
+  ];
 
   it("no phrase uses a retired word", () => {
     const offenders: string[] = [];
@@ -72,16 +83,19 @@ describe("the retired vocabulary never comes back", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("no phrase abbreviates the delivery tracker to DT", () => {
+  // THE OWNER ASKED FOR THE ABBREVIATION. "Use 'Guard' and 'DT'" (22 Oct
+  // 2026) — his team says DT out loud, so the rule that used to forbid it is
+  // now the rule that requires it: no phrase may spell the tracker out.
+  it("never spells the tracker out", () => {
     const offenders = phrasedNames()
       .map((n) => variancePhrase(n)!)
-      .filter((p) => /\bDT\b/.test(p));
+      .filter((ph) => /delivery tracker/i.test(ph));
     expect(offenders).toEqual([]);
   });
 
   it("every phrase names only the four books", () => {
     const allowed = Object.values(SOURCE_NAME);
-    expect(allowed).toEqual(["Odoo", "Manual Sheet", "Delivery Tracker", "Guard Check"]);
+    expect(allowed).toEqual(["Odoo", "MS", "DT", "Guard"]);
     // A phrase in the presence grammar must name at least one of them.
     for (const name of phrasedNames()) {
       const phrase = variancePhrase(name)!;
@@ -95,9 +109,9 @@ describe("the stored source codes each have a name", () => {
   it("names all five, including the one that is not a book", () => {
     expect(SOURCE_LABEL).toEqual({
       Odoo: "Odoo",
-      Sheet: "Manual Sheet",
-      DT: "Delivery Tracker",
-      Physical: "Guard Check",
+      Sheet: "MS",
+      DT: "DT",
+      Physical: "Guard",
       // Raised when the sources contradict each other rather than one being
       // silent — not a book, so not given a book's name.
       Cross: "Cross-check",

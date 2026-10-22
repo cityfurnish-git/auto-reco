@@ -486,6 +486,9 @@ const CLEARED_ON_RECHECK: VarianceLabel = {
  * destroy the record of what the engine actually decided at the time.
  */
 const RENAMED: Record<string, string> = {
+  // Pre-0010 spellings. Two of these were found on 22 Oct by the test that
+  // checks migration 0051 leaves every old spelling readable; they were one row
+  // each and had been falling through to UNLABELLED since July.
   "Odoo-Only Entry — No Floor Record": VARIANCE.ODOO_ONLY,
   "Register/DT Logged — Not in Odoo": VARIANCE.FLOOR_DT_NOT_ODOO,
   "DT Missing — Ops & Odoo Agree": VARIANCE.OPS_ODOO_NO_DT,
@@ -493,7 +496,64 @@ const RENAMED: Record<string, string> = {
   "Sheet-Only Dispatch — No Trail": VARIANCE.SHEET_ONLY,
   "DT-Only — Fake Scan Risk": VARIANCE.DT_ONLY,
   "Duplicate Scan / Multi-Source Mismatch": VARIANCE.DUPLICATE,
+  "Physical + Odoo Agree — No Register/DT": VARIANCE.GATE_ODOO_NO_OPS_DT,
+  "All-Source Field Mismatch": VARIANCE.FIELD_MISMATCH,
+
+  // The spellings the engine produced until 22 Oct 2026, when the names were
+  // rewritten in plain words and migration 0051 rewrote the stored rows with
+  // them. Kept because the migration cannot reach a row written mid-rollout or
+  // restored from a backup, and because this map is also what lets somebody
+  // search for the name on an old screenshot or in an old email and still find
+  // their row — see searchAliases() below.
+  "Wrong Barcode Scanned in DT": VARIANCE.WRONG_SCAN,
+  "Moved on Floor + DT — Not Posted in Odoo": VARIANCE.FLOOR_DT_NOT_ODOO,
+  "Gate + Ops Confirm — No DT Scan or Odoo Post": VARIANCE.GATE_OPS_NO_DT_ODOO,
+  "Gate Register Only — No Ops / DT / Odoo Record": VARIANCE.GATE_ONLY,
+  "Ops Sheet Only — No Gate / DT / Odoo Record": VARIANCE.SHEET_ONLY,
+  "Pickup Logged (Gate + DT) — Odoo Receipt Open": VARIANCE.PICKUP_ODOO_OPEN,
+  "DT Only — No Floor or Odoo Record": VARIANCE.DT_ONLY,
+  "Same Unit In + Out Today — Confirm Replacement": VARIANCE.REPLACEMENT_CONFIRM,
+  "Failed Delivery — Return Not Logged Inward": VARIANCE.FAILED_DELIVERY,
+  "Ops Sheet Says Not Delivered — Posted Done in DT/Odoo": VARIANCE.SHEET_NOT_DONE_BUT_POSTED,
+  "Odoo Entry Created Today — No Gate / Ops / DT Record": VARIANCE.ODOO_ONLY_TODAY,
+  "OT CASE — Order Transfer in Odoo, Map Manually": VARIANCE.OT_CASE,
+  "ODD HOUR TRIP — Movement at a Time the Gate Rarely Sees": VARIANCE.ODD_HOUR_TRIP,
+  "Odoo Entry Made Late — Past the Posting Deadline": VARIANCE.ODOO_PAST_DEADLINE,
+  "Received Without a Barcode — Not Assigned Within 24 Hours": VARIANCE.BARCODE_OVERDUE,
+  "Sheet + DT + Odoo Confirm — Missing from Gate Register": VARIANCE.SHEET_DT_ODOO_NO_GATE,
+  "Gate + DT + Odoo Confirm — Missing from Ops Sheet": VARIANCE.GATE_DT_ODOO_NO_SHEET,
+  "Ops + Odoo Confirm — Missing from Gate Register": VARIANCE.OPS_ODOO_NO_GATE,
+  "Entry Dated Wrong Day — Unit Logged on Adjacent Day": VARIANCE.ADJACENT_DAY,
+  "Odoo Posting Only — No Gate / Ops / DT Record": VARIANCE.ODOO_ONLY,
+  "Odoo Entry Made Late — Posted Next Day": VARIANCE.ODOO_POSTED_NEXT_DAY,
+  "Odoo Entry Made Late — Posted a Few Days On": VARIANCE.ODOO_POSTED_LATE,
+  "Items In Transit — Odoo Out Not Yet Validated": VARIANCE.ODOO_OUT_PENDING,
+  "Ops + Odoo Confirm — No DT Scan": VARIANCE.OPS_ODOO_NO_DT,
+  "DT + Odoo Confirm — Missing from Ops Sheet": VARIANCE.DT_ODOO_NO_SHEET,
+  "Gate + Ops + Odoo Confirm — DT Scan Pending": VARIANCE.GATE_OPS_ODOO_NO_DT,
+  "Gate + Odoo Confirm — No Ops Sheet or DT Scan": VARIANCE.GATE_ODOO_NO_OPS_DT,
+  "Ops + DT Confirm — Odoo Posting Pending": VARIANCE.OPS_DT_ODOO_PENDING,
+  "All Sources Agree — Barcode Text Differs (OCR/Typo)": VARIANCE.FIELD_MISMATCH,
+  "Duplicate Scan — Same Barcode Logged Twice": VARIANCE.DUPLICATE,
 };
+
+/**
+ * Current names whose OLD spelling contains the typed text.
+ *
+ * So that a free-text search for a name off an old screenshot, email or export
+ * still finds the row it belongs to. The row itself now stores the new name, so
+ * matching the stored string alone would return nothing and read as "that
+ * variance never happened".
+ */
+export function searchAliases(query: string): string[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 3) return [];
+  const hits = new Set<string>();
+  for (const [old, current] of Object.entries(RENAMED)) {
+    if (old.toLowerCase().includes(q)) hits.add(current);
+  }
+  return [...hits];
+}
 
 export function labelFor(rawName: string, ctx: LabelContext = {}): VarianceLabel {
   const name = RENAMED[rawName] ?? rawName;

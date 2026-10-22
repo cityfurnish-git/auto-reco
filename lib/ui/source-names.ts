@@ -6,23 +6,34 @@
 // four words for one book, and a reader had to learn all four to follow a row
 // from a dashboard to an inbox.
 //
-// PRESENTATION ONLY. The stored values (`Physical`, `Sheet`, `DT`, `Odoo` in
+// PRESENTATION ONLY. The stored codes (`Physical`, `Sheet`, `DT`, `Odoo` in
 // variances.variance_source, and the source codes inside the engine) are
-// untouched: they are written on every historical row and are what every filter
-// and every query matches on. Renaming those would orphan the 4,000+ rows
-// already stored — and the six obsolete variance names still sitting in the
-// table are the standing proof of what that costs.
+// untouched: they are what every filter and every query matches on.
 //
-// So: change the word, never the value.
+// So: change the word, never the code. (Variance NAMES are a different matter —
+// those were renamed in the rows as well on 22 Oct 2026, because the owner reads
+// them and a stored string he cannot understand is not an asset.)
 
 import type { VarianceSource } from "../db/schema";
 
-/** What each book is called, everywhere a person reads it. */
+/**
+ * What each book is called, everywhere a person reads it.
+ *
+ * THE OWNER'S OWN WORDS, 22 Oct 2026: "Use 'Guard' and 'DT'", and the four
+ * sources given as "Odoo/Guard/DT/MS". These replace the spelled-out names
+ * chosen on 15 Sep ("Guard Check", "Delivery Tracker", "Manual Sheet"), which
+ * were written for a reader who had never seen the tool and are not what the
+ * warehouse says out loud. One vocabulary is still the rule; these are now the
+ * words it uses.
+ *
+ * MS is the movement sheet — the ops Google sheet. "The floor" is Guard and MS
+ * together, for the rules that accept either of them.
+ */
 export const SOURCE_NAME = {
   odoo: "Odoo",
-  sheet: "Manual Sheet",
-  dt: "Delivery Tracker",
-  gate: "Guard Check",
+  sheet: "MS",
+  dt: "DT",
+  gate: "Guard",
 } as const;
 
 /**

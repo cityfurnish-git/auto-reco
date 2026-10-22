@@ -13,21 +13,62 @@
 // "DT-Only — Fake Scan Risk". The information was right and the reader had to
 // re-learn the format on every row.
 //
-// PRESENTATION ONLY, and this is the point of the file. variance_name is
-// written onto every stored row: 4,000+ rows across 30 distinct spellings,
-// SIX of which no version of this code produces any more. Renaming the
-// constants would leave every one of those rows speaking an older language and
-// would split each filter in two. So the stored name stays the key and this is
-// the sentence shown beside it — which also lets the six obsolete names be
-// mapped onto current wording, something a rename could never do.
+// THE ARGUMENT THIS FILE WAS BUILT ON HAS CHANGED. It used to say that renaming
+// the constants would leave every stored row speaking an older language, so the
+// cryptic engine name stayed and this sentence was shown beside it. On 22 Oct
+// 2026 the owner read those names and could not follow them, so the names
+// themselves were rewritten and migration 0051 rewrote the stored rows with
+// them — the thing this file existed to avoid, done deliberately and with the
+// data brought along.
 //
-// Keyed by the literal stored string rather than by VARIANCE.*, because the
-// obsolete names have no constant to key on.
+// So the entries below are keyed by VARIANCE.* now, and what remains keyed by a
+// literal is a BRIDGE: the pre-rename spellings, plus seven older ones no code
+// has produced for months, so a row the migration could not reach still reads
+// like a current one.
 
+import { VARIANCE } from "../engine/variance-names";
 import { SOURCE_NAME as S } from "./source-names";
 
 const PHRASE: Record<string, string> = {
   // ── Chase list ─────────────────────────────────────────────────────────
+  [VARIANCE.GATE_ONLY]: `Missing from ${S.sheet} + ${S.dt} + ${S.odoo}`,
+  [VARIANCE.SHEET_ONLY]: `Missing from ${S.gate} + ${S.dt} + ${S.odoo}`,
+  [VARIANCE.DT_ONLY]: `Missing from ${S.gate} + ${S.sheet} + ${S.odoo}`,
+  [VARIANCE.ODOO_ONLY_TODAY]: `Missing from ${S.gate} + ${S.sheet} + ${S.dt} · Entry created that day`,
+  [VARIANCE.FLOOR_DT_NOT_ODOO]: `Missing from ${S.odoo}`,
+  [VARIANCE.GATE_OPS_NO_DT_ODOO]: `Missing from ${S.dt} + ${S.odoo}`,
+  [VARIANCE.PICKUP_ODOO_OPEN]: `${S.odoo} receipt still open`,
+  [VARIANCE.WRONG_SCAN]: `Wrong unit scanned · ${S.dt}`,
+  [VARIANCE.REPLACEMENT_CONFIRM]: "Same unit in and out · Confirm replacement",
+  [VARIANCE.FAILED_DELIVERY]: "Failed delivery · Return not logged inward",
+  [VARIANCE.ODOO_PAST_DEADLINE]: "Odoo posted late · past the deadline",
+  [VARIANCE.BARCODE_OVERDUE]: "Received untagged · no barcode after 24h",
+  [VARIANCE.SHEET_DT_ODOO_NO_GATE]: "Three books have it · no gate log line",
+  [VARIANCE.GATE_DT_ODOO_NO_SHEET]: "Three books have it · no ops sheet line",
+  [VARIANCE.ODD_HOUR_TRIP]: `Odd hour · Trip at a time the gate rarely sees`,
+  [VARIANCE.OT_CASE]: `OT case · Order transfer in ${S.odoo}, map by hand`,
+  [VARIANCE.SHEET_NOT_DONE_BUT_POSTED]: `${S.sheet} says not delivered · ${S.odoo} and ${S.dt} say done`,
+
+  // ── For information ────────────────────────────────────────────────────
+  [VARIANCE.OPS_ODOO_NO_GATE]: `Missing from ${S.gate}`,
+  [VARIANCE.OPS_ODOO_NO_DT]: `Missing from ${S.dt}`,
+  [VARIANCE.DT_ODOO_NO_SHEET]: `Missing from ${S.sheet}`,
+  [VARIANCE.GATE_OPS_ODOO_NO_DT]: `Missing from ${S.dt}`,
+  [VARIANCE.GATE_ODOO_NO_OPS_DT]: `Missing from ${S.sheet} + ${S.dt}`,
+  [VARIANCE.OPS_DT_ODOO_PENDING]: `${S.odoo} posting pending`,
+  [VARIANCE.ODOO_ONLY]: `Missing from ${S.gate} + ${S.sheet} + ${S.dt}`,
+  [VARIANCE.ODOO_POSTED_NEXT_DAY]: `${S.odoo} posted late · Next day`,
+  [VARIANCE.ODOO_POSTED_LATE]: `${S.odoo} posted late · Two days or more`,
+  [VARIANCE.ODOO_OUT_PENDING]: `In transit · ${S.odoo} Out not validated`,
+  [VARIANCE.ADJACENT_DAY]: "Logged a day either side",
+  [VARIANCE.FIELD_MISMATCH]: "All four agree · Barcode text differs",
+  [VARIANCE.DUPLICATE]: "Duplicate scan · Same barcode twice",
+
+  // ── Renamed 22 Oct 2026, still on rows a migration could not reach ─────
+  // The spellings above these were the stored names until migration 0051
+  // rewrote them. The migration covers every row it can see; a row written by
+  // an older deployment mid-rollout, or restored from a backup, would otherwise
+  // read as a blank. Same phrase as its successor, so it reads like one.
   "Gate Register Only — No Ops / DT / Odoo Record": `Missing from ${S.sheet} + ${S.dt} + ${S.odoo}`,
   "Ops Sheet Only — No Gate / DT / Odoo Record": `Missing from ${S.gate} + ${S.dt} + ${S.odoo}`,
   "DT Only — No Floor or Odoo Record": `Missing from ${S.gate} + ${S.sheet} + ${S.odoo}`,
@@ -45,8 +86,6 @@ const PHRASE: Record<string, string> = {
   "ODD HOUR TRIP — Movement at a Time the Gate Rarely Sees": `Odd hour · Trip at a time the gate rarely sees`,
   "OT CASE — Order Transfer in Odoo, Map Manually": `OT case · Order transfer in ${S.odoo}, map by hand`,
   "Ops Sheet Says Not Delivered — Posted Done in DT/Odoo": `${S.sheet} says not delivered · ${S.odoo} and ${S.dt} say done`,
-
-  // ── For information ────────────────────────────────────────────────────
   "Ops + Odoo Confirm — Missing from Gate Register": `Missing from ${S.gate}`,
   "Ops + Odoo Confirm — No DT Scan": `Missing from ${S.dt}`,
   "DT + Odoo Confirm — Missing from Ops Sheet": `Missing from ${S.sheet}`,
@@ -72,6 +111,11 @@ const PHRASE: Record<string, string> = {
   "Sheet-Only Dispatch — No Trail": `Missing from ${S.gate} + ${S.dt} + ${S.odoo}`,
   "DT-Only — Fake Scan Risk": `Missing from ${S.gate} + ${S.sheet} + ${S.odoo}`,
   "Duplicate Scan / Multi-Source Mismatch": "Duplicate scan · Same barcode twice",
+  // Found by tests/db/rename-migration.test.ts, which checks that every spelling
+  // the migration touches stays readable. These two were on one row each and had
+  // never been phrased — a reader opening either saw a blank second line.
+  "Physical + Odoo Agree — No Register/DT": `Missing from ${S.sheet} + ${S.dt}`,
+  "All-Source Field Mismatch": "All four agree · Barcode text differs",
 };
 
 /**

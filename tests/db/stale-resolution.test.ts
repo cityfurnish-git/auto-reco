@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import { resolveStaleOpenVariances } from "../../lib/db/persist";
 import { RESOLVED_LATE_NOTE } from "../../lib/engine/resolution";
 import type { CityRunResult, MovementEvent, VarianceRowOut } from "../../lib/engine/types";
+import { VARIANCE } from "../../lib/engine/variance-names";
 
 const ALL: { P: boolean; S: boolean; D: boolean; O: boolean } = {
   P: true, S: true, D: true, O: true,
@@ -51,7 +52,7 @@ function variance(over: Partial<VarianceRowOut> = {}): VarianceRowOut {
     barcode_display: "ITEM-1",
     city: "MUMBAI",
     direction: "OUT",
-    variance_name: "Odoo Posting Only — No Gate / Ops / DT Record",
+    variance_name: VARIANCE.ODOO_ONLY,
     priority: "Info",
     bucket: "INFO",
     responsible: "odoo_team",
@@ -163,7 +164,7 @@ const REPORTED = { MUMBAI: ALL } as never;
 describe("resolveStaleOpenVariances", () => {
   it("deletes a stale row for a unit the engine SUPPRESSED, instead of calling it cleared", async () => {
     const s = stubDb([
-      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: "Odoo Posting Only — No Gate / Ops / DT Record" },
+      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: VARIANCE.ODOO_ONLY },
     ]);
     const res = await resolveStaleOpenVariances(
       s.db,
@@ -182,7 +183,7 @@ describe("resolveStaleOpenVariances", () => {
     // The branch this guard must not break: no variance AND no suppression, on a
     // fully covered run, is the late entry it was written for.
     const s = stubDb([
-      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: "Moved on Floor + DT — Not Posted in Odoo" },
+      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: VARIANCE.FLOOR_DT_NOT_ODOO },
     ]);
     const res = await resolveStaleOpenVariances(
       s.db,
@@ -200,7 +201,7 @@ describe("resolveStaleOpenVariances", () => {
     // The OUT leg was suppressed; the IN leg's own open row is untouched by it
     // and takes the ordinary clean-resolution path.
     const s = stubDb([
-      { id: "in", direction: "IN", barcode: "ITEM-1", variance_name: "Ops Sheet Only — No Gate / DT / Odoo Record" },
+      { id: "in", direction: "IN", barcode: "ITEM-1", variance_name: VARIANCE.SHEET_ONLY },
     ]);
     const res = await resolveStaleOpenVariances(
       s.db,
@@ -215,7 +216,7 @@ describe("resolveStaleOpenVariances", () => {
 
   it("leaves a row that is still current alone", async () => {
     const s = stubDb([
-      { id: "cur", direction: "OUT", barcode: "ITEM-1", variance_name: "Odoo Posting Only — No Gate / Ops / DT Record" },
+      { id: "cur", direction: "OUT", barcode: "ITEM-1", variance_name: VARIANCE.ODOO_ONLY },
     ]);
     const res = await resolveStaleOpenVariances(
       s.db,
@@ -250,7 +251,7 @@ describe("resolveStaleOpenVariances", () => {
           id: "old",
           direction: "OUT",
           barcode: "ITEM-1",
-          variance_name: "Moved on Floor + DT — Not Posted in Odoo",
+          variance_name: VARIANCE.FLOOR_DT_NOT_ODOO,
           reported_p: false, reported_s: false, reported_d: true, reported_o: true,
         },
       ]);
@@ -277,14 +278,14 @@ describe("resolveStaleOpenVariances", () => {
     });
 
     it("does not retire when only SOME of the accused books turned up", async () => {
-      // "Gate + Ops Confirm — No DT Scan or Odoo Post" accuses two. DT arriving
+      // VARIANCE.GATE_OPS_NO_DT_ODOO accuses two. DT arriving
       // makes the row's NAME wrong; it does not make the row untrue.
       const s = stubDb([
         {
           id: "old",
           direction: "OUT",
           barcode: "ITEM-1",
-          variance_name: "Gate + Ops Confirm — No DT Scan or Odoo Post",
+          variance_name: VARIANCE.GATE_OPS_NO_DT_ODOO,
           reported_p: true, reported_s: true, reported_d: true, reported_o: true,
         },
       ]);
@@ -319,7 +320,7 @@ describe("resolveStaleOpenVariances", () => {
           id: "old",
           direction: "OUT",
           barcode: "ITEM-1",
-          variance_name: "Gate Register Only — No Ops / DT / Odoo Record",
+          variance_name: VARIANCE.GATE_ONLY,
           reported_p: true, reported_s: true, reported_d: true, reported_o: true,
         },
       ]);
@@ -353,7 +354,7 @@ describe("resolveStaleOpenVariances", () => {
           id: "old",
           direction: "OUT",
           barcode: "ITEM-1",
-          variance_name: "All Sources Agree — Barcode Text Differs (OCR/Typo)",
+          variance_name: VARIANCE.FIELD_MISMATCH,
           reported_p: true, reported_s: true, reported_d: true, reported_o: true,
         },
       ]);
@@ -376,7 +377,7 @@ describe("resolveStaleOpenVariances", () => {
           id: "old",
           direction: "OUT",
           barcode: "ITEM-1",
-          variance_name: "All Sources Agree — Barcode Text Differs (OCR/Typo)",
+          variance_name: VARIANCE.FIELD_MISMATCH,
           reported_p: true, reported_s: true, reported_d: true, reported_o: true,
         },
       ]);
@@ -399,7 +400,7 @@ describe("resolveStaleOpenVariances", () => {
           id: "in",
           direction: "IN",
           barcode: "ITEM-1",
-          variance_name: "Moved on Floor + DT — Not Posted in Odoo",
+          variance_name: VARIANCE.FLOOR_DT_NOT_ODOO,
           reported_p: false, reported_s: false, reported_d: true, reported_o: true,
         },
       ]);
@@ -428,7 +429,7 @@ describe("resolveStaleOpenVariances", () => {
           id: "old",
           direction: "OUT",
           barcode: "ITEM-1",
-          variance_name: "Moved on Floor + DT — Not Posted in Odoo",
+          variance_name: VARIANCE.FLOOR_DT_NOT_ODOO,
         },
       ]);
       const res = await resolveStaleOpenVariances(
@@ -464,7 +465,7 @@ describe("resolveStaleOpenVariances", () => {
             id: "old",
             direction: "OUT",
             barcode: "ITEM-1",
-            variance_name: "Moved on Floor + DT — Not Posted in Odoo",
+            variance_name: VARIANCE.FLOOR_DT_NOT_ODOO,
           },
         ],
         true // no reported_* columns
@@ -500,7 +501,7 @@ describe("resolveStaleOpenVariances", () => {
           id: "old",
           direction: "OUT",
           barcode: "ITEM-1",
-          variance_name: "Ops Sheet Only — No Gate / DT / Odoo Record",
+          variance_name: VARIANCE.SHEET_ONLY,
         },
       ]);
       const res = await resolveStaleOpenVariances(
@@ -534,7 +535,7 @@ describe("resolveStaleOpenVariances", () => {
     // from this run, so it stands on partial coverage — exactly like the
     // supersede branch it shares.
     const s = stubDb([
-      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: "Odoo Posting Only — No Gate / Ops / DT Record" },
+      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: VARIANCE.ODOO_ONLY },
     ]);
     const res = await resolveStaleOpenVariances(
       s.db,

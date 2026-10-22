@@ -74,7 +74,7 @@ export function DayStatus({ agg, loading, error, onOpenList }: {
   onOpenList: (r: ListRequest) => void;
 }) {
   const books = [
-    ["Guard Check", agg?.sources?.gate],
+    ["Guard", agg?.sources?.gate],
     [SOURCE_NAME.sheet, agg?.sources?.sheet],
     [SOURCE_NAME.dt, agg?.sources?.dt],
     [SOURCE_NAME.odoo, agg?.sources?.odoo],

@@ -10,6 +10,7 @@ import {
   NO_ACTION_REASON,
   settleUnactionableVariances,
 } from "../../lib/reconcile/settle";
+import { VARIANCE } from "../../lib/engine/variance-names";
 
 interface Row {
   id: string;
@@ -28,7 +29,7 @@ function row(over: Partial<Row> = {}): Row {
     city: "MUMBAI",
     business_date: "2026-07-01",
     direction: "OUT",
-    variance_name: "Gate Register Only — No Ops / DT / Odoo Record",
+    variance_name: VARIANCE.GATE_ONLY,
     bucket: "REAL",
     job_type: null,
     note: null,
@@ -106,7 +107,7 @@ describe("settleUnactionableVariances", () => {
     // identical here — and reading any of them as "every date has expired" would
     // close the entire table as unverifiable. The tier-3 branch is unaffected:
     // it does not rest on retention at all.
-    const s = stubDb({ floor: null, rows: [row({ id: "real" }), row({ id: "t3", variance_name: "Odoo Entry Made Late — Posted Next Day", bucket: "INFO" })] });
+    const s = stubDb({ floor: null, rows: [row({ id: "real" }), row({ id: "t3", variance_name: VARIANCE.ODOO_POSTED_NEXT_DAY, bucket: "INFO" })] });
     const res = await settleUnactionableVariances(s.db, { today: TODAY });
     expect(res.cutoff).toBeNull();
     expect(res.agedOut).toBe(0);
@@ -147,8 +148,8 @@ describe("settleUnactionableVariances", () => {
     const s = stubDb({
       floor: "2026-08-03", // frozen forever once nothing is pruned
       rows: [
-        row({ id: "t3", business_date: "2026-10-01", variance_name: "All Sources Agree — Barcode Text Differs (OCR/Typo)", bucket: "INFO" }),
-        row({ id: "real", business_date: "2026-10-01", variance_name: "Gate Register Only — No Ops / DT / Odoo Record", bucket: "REAL" }),
+        row({ id: "t3", business_date: "2026-10-01", variance_name: VARIANCE.FIELD_MISMATCH, bucket: "INFO" }),
+        row({ id: "real", business_date: "2026-10-01", variance_name: VARIANCE.GATE_ONLY, bucket: "REAL" }),
       ],
     });
     const res = await settleUnactionableVariances(s.db, { today: "2026-12-01" });
@@ -190,10 +191,10 @@ describe("settleUnactionableVariances", () => {
       floor: "2026-08-03",
       rows: [
         // Tier 3: the engine's own label for these is "None."
-        row({ id: "a", variance_name: "All Sources Agree — Barcode Text Differs (OCR/Typo)", bucket: "INFO" }),
-        row({ id: "b", variance_name: "Odoo Entry Made Late — Posted Next Day", bucket: "INFO" }),
+        row({ id: "a", variance_name: VARIANCE.FIELD_MISMATCH, bucket: "INFO" }),
+        row({ id: "b", variance_name: VARIANCE.ODOO_POSTED_NEXT_DAY, bucket: "INFO" }),
         // Tier 1: a real chase item whose evidence is simply gone.
-        row({ id: "c", variance_name: "Gate Register Only — No Ops / DT / Odoo Record", bucket: "REAL" }),
+        row({ id: "c", variance_name: VARIANCE.GATE_ONLY, bucket: "REAL" }),
       ],
     });
     const res = await settleUnactionableVariances(s.db, { today: TODAY });
@@ -230,7 +231,7 @@ describe("settleUnactionableVariances", () => {
   it("writes nothing on a dry run but reports exactly what it would do", async () => {
     const s = stubDb({
       floor: "2026-08-03",
-      rows: [row({ id: "a" }), row({ id: "b", variance_name: "Odoo Entry Made Late — Posted Next Day", bucket: "INFO" })],
+      rows: [row({ id: "a" }), row({ id: "b", variance_name: VARIANCE.ODOO_POSTED_NEXT_DAY, bucket: "INFO" })],
     });
     const res = await settleUnactionableVariances(s.db, { today: TODAY, dryRun: true });
     expect(res.agedOut).toBe(1);
