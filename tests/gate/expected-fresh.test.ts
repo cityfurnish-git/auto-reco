@@ -17,6 +17,11 @@ const fetchExpectedMock = vi.fn();
 vi.mock("../../lib/connectors/metabase", () => ({
   metabaseConfigured: () => true,
   runNativeSql: (...a: unknown[]) => fetchExpectedMock(...a),
+  // The Tracker's database is now FOUND rather than configured (22 Oct 2026),
+  // so the module exports a resolver the gate paths await. This test never
+  // reaches Mongo, but the mock must still carry every export its subject
+  // imports or the import itself fails.
+  mongoDatabaseId: async () => 6,
 }));
 
 const { ensureExpectedFresh, refreshExpected, EXPECTED_MAX_AGE_MS } =

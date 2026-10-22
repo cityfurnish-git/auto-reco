@@ -210,6 +210,59 @@ export async function runNativeSql(
  * here, which is the only kind worth relying on against somebody else's
  * production database.
  */
+/**
+ * The id of the Mongo database Metabase holds, found rather than configured.
+ *
+ * WHY THIS LOOKS IT UP (owner, 22 Oct 2026). METABASE_DT_DB_ID was set to 5 in
+ * production — Odoo's Postgres — so every Tracker pipeline was posted to a SQL
+ * engine, which answered "syntax error at or near [". It failed the same way
+ * for the gate's customer lookup, quietly, for weeks: measured 21 Oct, 93 of
+ * 112 gate scans got a product (that comes from Odoo and worked) and ONE got a
+ * customer (that comes from the Tracker and did not).
+ *
+ * An id in an environment variable is a number nobody can sanity-check by
+ * reading it. Metabase already knows which of its databases is MongoDB, and
+ * there is exactly one, so ask it.
+ *
+ * The env var still wins WHEN IT NAMES A MONGO DATABASE — a second Mongo
+ * connection one day is a real possibility, and that is the case worth being
+ * explicit about. Pointed at anything else, it is ignored rather than obeyed.
+ */
+let mongoDbIdCache: number | null = null;
+
+export async function mongoDatabaseId(): Promise<number> {
+  if (mongoDbIdCache !== null) return mongoDbIdCache;
+  const res = await fetch(`${baseUrl()}/api/database`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`Metabase database list failed: HTTP ${res.status}`);
+  const json = (await res.json()) as { data?: unknown[] } | unknown[];
+  const list = (Array.isArray(json) ? json : json.data ?? []) as {
+    id: number; engine?: string; name?: string;
+  }[];
+  const mongo = list.filter((d) => String(d.engine).toLowerCase() === "mongo");
+
+  const pinned = Number(process.env.METABASE_DT_DB_ID);
+  if (pinned && mongo.some((d) => d.id === pinned)) {
+    mongoDbIdCache = pinned;
+    return pinned;
+  }
+  if (mongo.length === 0) {
+    throw new Error(
+      "Metabase has no MongoDB database connected, so the Delivery Tracker cannot be read through it."
+    );
+  }
+  // More than one would mean a real choice to make, and silently taking the
+  // first is how the wrong one gets read for a month. Name it in the error.
+  if (mongo.length > 1 && !pinned) {
+    throw new Error(
+      `Metabase has ${mongo.length} MongoDB databases (${mongo
+        .map((d) => `${d.id}:${d.name}`)
+        .join(", ")}). Set METABASE_DT_DB_ID to the Delivery Tracker's id.`
+    );
+  }
+  mongoDbIdCache = mongo[0].id;
+  return mongoDbIdCache;
+}
+
 export async function runMongoPipeline(
   databaseId: number,
   collection: string,

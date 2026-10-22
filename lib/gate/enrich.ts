@@ -242,7 +242,7 @@ export async function fetchUnitTasks(serials: string[]): Promise<Map<string, Uni
   const pipeline = unitTaskPipeline(serials);
   if (!pipeline) return out;
 
-  const { rows } = await runMongoPipeline(dtDatabaseId(), "orderfromcityfurnishes", pipeline, TIMEOUT_MS);
+  const { rows } = await runMongoPipeline(await dtDatabaseId(), "orderfromcityfurnishes", pipeline, TIMEOUT_MS);
   const str = (v: unknown) => {
     const s = v == null ? "" : String(v).replace(/\s+/g, " ").trim();
     return s === "" || s.toLowerCase() === "null" ? null : s;
@@ -478,7 +478,7 @@ export function orderTasksPipeline(sos: string[], refs: string[], from: Date, to
 export async function fetchOrderTasks(sos: string[], refs: string[], from: Date, to: Date): Promise<DtOrderTask[]> {
   const pipeline = orderTasksPipeline(sos, refs, from, to);
   if (!pipeline) return [];
-  const { rows } = await runMongoPipeline(dtDatabaseId(), "deliveries", pipeline, TIMEOUT_MS);
+  const { rows } = await runMongoPipeline(await dtDatabaseId(), "deliveries", pipeline, TIMEOUT_MS);
   return (rows as Record<string, unknown>[]).flatMap((r) => {
     const ticket = String(r.ticketNumber ?? "").trim();
     if (!ticket) return [];

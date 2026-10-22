@@ -49,7 +49,7 @@
 // cap that only existed because it called the API without those constraints.
 
 import { MongoClient } from "mongodb";
-import { metabaseConfigured, runMongoPipeline } from "./metabase";
+import { metabaseConfigured, mongoDatabaseId, runMongoPipeline } from "./metabase";
 
 export interface DtTransport {
   readonly kind: "mongo" | "metabase";
@@ -81,13 +81,14 @@ export function toExtendedJson(value: unknown): unknown {
 }
 
 function metabaseTransport(): DtTransport {
-  const dbId = Number(process.env.METABASE_DT_DB_ID ?? 6);
+  // Found, not configured — see mongoDatabaseId(). A hard-coded id is how
+  // production spent weeks posting Mongo pipelines at Odoo's Postgres.
   // The standard name, and the one lib/gate/* has always used against this
   // database. Overridable for the same reason every other collection name is.
   const parent = process.env.METABASE_DT_PARENT ?? "deliveries";
 
   const run = async (collection: string, pipeline: unknown[]) =>
-    (await runMongoPipeline(dbId, collection, toExtendedJson(pipeline) as unknown[])).rows;
+    (await runMongoPipeline(await mongoDatabaseId(), collection, toExtendedJson(pipeline) as unknown[])).rows;
 
   return {
     kind: "metabase",

@@ -26,13 +26,13 @@
 // slow, unreachable or misconfigured must never be the reason a guard cannot
 // record a truck that is physically at the gate.
 
-import { runMongoPipeline, metabaseConfigured } from "../connectors/metabase";
+import { runMongoPipeline, metabaseConfigured, mongoDatabaseId } from "../connectors/metabase";
 import { normalizeCity } from "../connectors/types";
 import type { City } from "../sample-data";
 
 /** Which Metabase database is the Delivery Tracker. Overridable, because a
  *  Metabase instance can be rebuilt and the ids renumber. */
-export const dtDatabaseId = (): number => Number(process.env.METABASE_DT_DB_ID ?? 6);
+export const dtDatabaseId = mongoDatabaseId;
 
 /** This sits on a path a guard waits on, so it is bounded. */
 const TIMEOUT_MS = 8_000;
@@ -245,7 +245,7 @@ export async function fleetForCity(city: City, now: Date = new Date()): Promise<
   const { from, to } = fleetWindow(now);
   try {
     const table = await runMongoPipeline(
-      dtDatabaseId(), "trips", fleetPipeline(from, to), TIMEOUT_MS
+      await dtDatabaseId(), "trips", fleetPipeline(from, to), TIMEOUT_MS
     );
 
     const byVehicle = new Map<string, PlannedTrip>();

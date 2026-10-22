@@ -21,7 +21,7 @@
 // credential, an aggregation pipeline cannot write, and no production Mongo
 // connection string has to leave Vercel.
 
-import { runMongoPipeline, metabaseConfigured } from "../connectors/metabase";
+import { runMongoPipeline, metabaseConfigured, mongoDatabaseId } from "../connectors/metabase";
 import { normalizeCity } from "../connectors/types";
 import { deriveDtDirection, DT_EXCLUDED_JOB_TYPES } from "../connectors/dt-mapping";
 import { canonicalize } from "../engine/barcode";
@@ -30,7 +30,7 @@ import type { City } from "../sample-data";
 import type { Direction } from "../engine/types";
 
 /** Which Metabase database is DT. Shared with the fleet lookup. */
-const dtDb = (): number => Number(process.env.METABASE_DT_DB_ID ?? 6);
+const dtDb = mongoDatabaseId;
 
 /** On a path a guard waits on, so it is bounded. */
 const TIMEOUT_MS = 10_000;
@@ -186,7 +186,7 @@ export async function fetchDtExpected(businessDate: string): Promise<DtExpectedP
   const to = new Date(Date.parse(endUtcExclusive) + 12 * 3600_000);
 
   try {
-    const table = await runMongoPipeline(dtDb(), "deliveries",
+    const table = await runMongoPipeline(await dtDb(), "deliveries",
       dtExpectedPipeline(from, to), TIMEOUT_MS);
 
     const rows: DtExpectedRow[] = [];
