@@ -997,7 +997,7 @@ export function runReconciliation(
   const consumable_count = seenSpare.size;
 
   // Section 8 — direction conflict (already bucketed REAL).
-  const conflicts = detectDirectionConflicts(inViews, outViews, suppressed).map(
+  const conflicts = detectDirectionConflicts(inViews, outViews, suppressed, reported).map(
     (c) => ({ ...c, date: c.date || runDate })
   );
   variances.push(...conflicts);

@@ -7,12 +7,16 @@
 import { isNewRental, isRepairEquivalent, normalizeSO } from "./util";
 import { displayBarcode, hasDone, orFlags, presenceOf } from "./views";
 import { VARIANCE } from "./variance-names";
-import type { BarcodeView, VarianceRowOut } from "./types";
+import { ALL_REPORTED } from "./types";
+import type { BarcodeView, ReportedSources, VarianceRowOut } from "./types";
 
 export function detectDirectionConflicts(
   inViews: Map<string, BarcodeView>,
   outViews: Map<string, BarcodeView>,
-  suppressed: Set<string>
+  suppressed: Set<string>,
+  // Which books filed for this city and day. Needed because the rule below
+  // must not hold a missing gate book against a unit in a city that has none.
+  reported: ReportedSources = ALL_REPORTED
   // `reported` is stamped once by runReconciliation over the finished list.
 ): Omit<VarianceRowOut, "reported">[] {
   const out: Omit<VarianceRowOut, "reported">[] = [];
@@ -56,6 +60,27 @@ export function detectDirectionConflicts(
     const movedToday = (v: BarcodeView) =>
       v.P.present || v.S.present || v.D.present || !!v.odooSameDay;
     if (!movedToday(inView) || !movedToday(outView)) continue;
+
+    // BOTH FLOOR BOOKS SAW IT GO AND COME BACK (owner, 22 Oct 2026).
+    //
+    // A unit the ops sheet records leaving AND returning, with the gate saying
+    // the same where the gate exists, is a swap the floor documented twice over.
+    // Asking a person to confirm it is asking them to re-read two books that
+    // already agree.
+    //
+    // THE GATE IS ONLY REQUIRED WHERE IT REPORTED, and that clause is the whole
+    // rule. Measured over 2-21 Oct: 66 of these rows were raised and 64 of them
+    // fall in cities with no gate book at all, so demanding both gate legs
+    // everywhere made the rule unsatisfiable — it suppressed NOTHING. With the
+    // gate required only where it filed, 22 of the 66 stand down, every one of
+    // them a unit the sheet itself records both ways. It is the same principle
+    // the ladder already runs on: a book that did not report is never held
+    // against a unit.
+    const bothLegs = (pick: (v: BarcodeView) => { present: boolean }) =>
+      pick(inView).present && pick(outView).present;
+    const sheetSawBoth = bothLegs((v) => v.S);
+    const gateSawBoth = !reported.P || bothLegs((v) => v.P);
+    if (sheetSawBoth && gateSawBoth) continue;
 
     const outDone = hasDone(outView.D);
     // Read job type across BOTH legs (Section 7).

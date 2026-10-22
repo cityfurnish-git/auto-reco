@@ -41,11 +41,44 @@ describe("same unit in and out today", () => {
     expect(crossRows(res)).toHaveLength(0);
   });
 
-  it("is still raised when both legs moved today", () => {
+  // BOTH FLOOR BOOKS SAW IT GO AND COME BACK (owner, 22 Oct 2026), so there is
+  // nothing for a person to confirm — the swap is documented twice over.
+  // Measured over 2-21 Oct: 22 of 66 such rows stand down on this.
+  it("stands down when the gate AND the sheet both hold both legs", () => {
     const res = run([
       sameDay("OUT", "PHYSICAL"), sameDay("OUT", "SHEET"),
       sameDay("IN", "PHYSICAL"), sameDay("IN", "SHEET"),
     ]);
+    expect(crossRows(res)).toHaveLength(0);
+  });
+
+  it("is still raised when the sheet has both legs but the gate saw only one", () => {
+    const res = run([
+      sameDay("OUT", "PHYSICAL"), sameDay("OUT", "SHEET"),
+      sameDay("IN", "SHEET"),
+    ]);
     expect(crossRows(res)).toHaveLength(1);
+  });
+
+  it("is still raised when only the gate has both legs", () => {
+    const res = run([
+      sameDay("OUT", "PHYSICAL"), sameDay("IN", "PHYSICAL"),
+    ]);
+    expect(crossRows(res)).toHaveLength(1);
+  });
+
+  // THE CLAUSE THAT MAKES THE RULE WORK AT ALL. 64 of those 66 rows fall in
+  // cities with no gate book, so requiring both gate legs everywhere suppressed
+  // nothing. Where the gate did not file, the sheet's two legs are the whole
+  // of the evidence and they are enough.
+  it("stands down on the sheet alone in a city whose gate did not report", () => {
+    const res = runReconciliation(
+      [sameDay("OUT", "SHEET"), sameDay("IN", "SHEET")],
+      "MUMBAI",
+      { P: false, S: true, D: true, O: true },
+      new Set(),
+      D
+    );
+    expect(res.variances.filter((v) => v.variance_name === VARIANCE.REPLACEMENT_CONFIRM)).toHaveLength(0);
   });
 });
