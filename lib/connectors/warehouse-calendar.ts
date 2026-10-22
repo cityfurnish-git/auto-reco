@@ -24,7 +24,7 @@
 // status=false is a rule that has been switched off, not a day the warehouse
 // worked; the same field means the same thing on both masters.
 
-import { MongoClient } from "mongodb";
+import { dtTransport } from "./dt-transport";
 import type { City } from "../sample-data";
 import { normalizeCity } from "./types";
 
@@ -158,29 +158,45 @@ export function foldCalendar(
  * Read the calendar from the delivery app.
  *
  * Best-effort by contract: every caller treats a null as "no calendar today"
- * and falls back to the hardcoded map. A Mongo hiccup must never stop a
- * reconcile, and a calendar is not worth a failed run.
+ * and falls back to the stored copy, then to the hardcoded map. A Mongo hiccup
+ * must never stop a reconcile, and a calendar is not worth a failed run.
+ *
+ * ON THE SAME ROAD AS THE REST OF THE DELIVERY APP, since 22 Oct 2026. This
+ * read opened its OWN direct MongoClient while the delivery data moved to
+ * Metabase on 13 Oct, so when the allowlist shut the direct route this one
+ * failed alone — silently, because the pipeline catches it and carries on with
+ * whatever the last successful sync left behind.
+ *
+ * IT HAD BEEN FAILING FOR NINE DAYS. Every row in warehouse_calendar carried
+ * the same synced_at, 13 Oct 18:00 IST, while the delivery app's own master was
+ * edited on the 17th; a direct read from this machine on 22 Oct timed out after
+ * 15 seconds and returned null. The engine, the dashboards and the digest were
+ * all judging closures from a frozen copy, which is the worst version of this
+ * bug: a stale calendar answers confidently and nothing looks broken.
  */
 export async function readWarehouseCalendar(): Promise<WarehouseCalendar | null> {
-  const uri = process.env.DT_MONGODB_URI;
-  if (!uri) return null;
-  const client = new MongoClient(uri, { serverSelectionTimeoutMS: 15_000 });
+  const t = dtTransport();
   try {
-    await client.connect();
-    const db = client.db(process.env.DT_MONGODB_DB ?? "cityfurnish");
-    const col = db.collection("master_datas");
-    const [weekDoc, holidayDoc] = await Promise.all([
-      col.findOne({ master: "weekly_off" }),
-      col.findOne({ master: "holiday" }),
+    const docs = await t.aggregate("master_datas", [
+      { $match: { master: { $in: ["weekly_off", "holiday"] } } },
+      { $project: { master: 1, rows: 1 } },
     ]);
-    const rowsOf = (d: unknown): MasterRow[] => {
-      const rows = (d as { rows?: unknown } | null)?.rows;
+    const rowsOf = (master: string): MasterRow[] => {
+      const doc = docs.find((d) => d.master === master);
+      const rows = (doc as { rows?: unknown } | undefined)?.rows;
       return Array.isArray(rows) ? (rows as MasterRow[]) : [];
     };
-    return foldCalendar(rowsOf(weekDoc), rowsOf(holidayDoc));
+    const weekly = rowsOf("weekly_off");
+    const holidays = rowsOf("holiday");
+    // A read that reached the app but found no masters is not a calendar. Left
+    // as an empty one it would publish "no city is ever closed", and the sync
+    // replaces the stored copy wholesale — so one odd read would erase the real
+    // calendar rather than leaving the last good one in place.
+    if (weekly.length === 0 && holidays.length === 0) return null;
+    return foldCalendar(weekly, holidays);
   } catch {
     return null;
   } finally {
-    await client.close().catch(() => {});
+    await t.close().catch(() => {});
   }
 }
