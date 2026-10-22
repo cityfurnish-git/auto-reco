@@ -19,6 +19,8 @@ import { toPasses, type PassRef } from "@/lib/stock/passes";
 import { foldPass, parseSnapshotRow } from "@/lib/stock/snapshot";
 import { attributeCleared, diffPasses, suppressUntrustworthy } from "@/lib/stock/compare";
 import { assessComparability } from "@/lib/stock/coverage";
+import { readWarehouseCalendarRows } from "@/lib/db/persist";
+import type { ClosureCalendar } from "@/lib/engine/schedule";
 import { classifyRows } from "@/lib/email/followup/compare";
 
 export const runtime = "nodejs";
@@ -108,7 +110,14 @@ export const GET = jsonRoute("stock/compare", async (req: NextRequest) => {
   const foldedA = foldPass(a.runId, date, byRun.get(a.runId)!.map((s) => s!));
   const foldedB = foldPass(b.runId, date, byRun.get(b.runId)!.map((s) => s!));
 
-  const guard = assessComparability(foldedA, foldedB, date);
+  // CLOSURES READ FROM THE DELIVERY APP, not the literal weekly map. The two
+  // disagreed in all five cities on 22 Oct 2026 — the app had the Thursday rule
+  // switched off since the 17th, and carries one-off holidays the map has never
+  // known. Best-effort: null falls back to the map, exactly as before.
+  const calendar = (await readWarehouseCalendarRows(db).catch(
+    () => null
+  )) as ClosureCalendar | null;
+  const guard = assessComparability(foldedA, foldedB, date, calendar);
   const delta = diffPasses(foldedA, foldedB);
 
   // Human action vs system self-resolution, which is the split this page exists to

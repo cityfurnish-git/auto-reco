@@ -4,7 +4,8 @@
 // differs only in the gate and the body.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { saveEmailLog } from "../../db/persist";
+import { readWarehouseCalendarRows, saveEmailLog } from "../../db/persist";
+import type { ClosureCalendar } from "../../engine/schedule";
 import { saveEmailArchive } from "../email-archive";
 import type { ScheduledEmailDB } from "../../db/schema";
 import { CITIES } from "../../sample-data";
@@ -74,7 +75,15 @@ export async function sendFollowUpForRow(
     // Only when we gave up waiting — otherwise the banner would appear on every
     // healthy send and stop meaning anything.
     staleSince: fresh ? null : lastCompletedAt,
-    restDayCities: restDayCities(date, [...CITIES]),
+    // READ FROM THE DELIVERY APP, not the literal weekly map: the two disagreed
+    // in all five cities on 22 Oct 2026, the Thursday rule having been switched
+    // off on the 17th. This banner tells the reader which cities to forgive, so
+    // naming one that actually worked hides a real gap.
+    restDayCities: restDayCities(
+      date,
+      [...CITIES],
+      (await readWarehouseCalendarRows(db).catch(() => null)) as ClosureCalendar | null
+    ),
   });
 
   const logId = await saveEmailLog(db, {

@@ -19,5 +19,10 @@ export default async function StockAnalyserPage() {
   // Open on the day the re-check pass most recently re-ran — the newest date that
   // can actually HAVE two checks. Opening on yesterday would show "only checked
   // once" every single time.
+  //
+  // NO CALENDAR HERE ON PURPOSE. recheckTargetDate takes one, and the digest
+  // cron passes it because the date it re-runs has to be right. This is the
+  // date a PICKER opens on, so a day either side costs a click and not a wrong
+  // answer — not worth a database read on every page render.
   return <StockAnalyserClient today={istDate()} defaultDate={recheckTargetDate()} />;
 }

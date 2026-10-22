@@ -14,11 +14,18 @@ import { getCurrentAppUser } from "@/lib/db/current-user";
 import { CITIES } from "@/lib/sample-data";
 import { accuracyOf, daysBefore, dailyTotals, scorable, type StatRow } from "@/lib/stats/accuracy";
 import { readCityStats } from "@/lib/stats/city-stats";
+import { readWarehouseCalendarRows } from "@/lib/db/persist";
+import type { ClosureCalendar } from "@/lib/engine/schedule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function cityAggregate(rows: StatRow[], from: string, to: string) {
+function cityAggregate(
+  rows: StatRow[],
+  from: string,
+  to: string,
+  cal?: ClosureCalendar | null
+) {
   return CITIES.map((city) => {
     let movements = 0;
     let real = 0;
@@ -26,7 +33,7 @@ function cityAggregate(rows: StatRow[], from: string, to: string) {
     for (const r of rows) {
       // `scorable` carries the shut-warehouse exclusion the leaderboard and the
       // daily trend below both use — one rule, one home.
-      if (r.city !== city || !scorable(r, from, to)) continue;
+      if (r.city !== city || !scorable(r, from, to, cal)) continue;
       movements += r.movements;
       real += r.real_count;
       high += r.high_count;
@@ -42,6 +49,14 @@ export const GET = jsonRoute("analytics", async () => {
   }
 
   const db = createAdminClient();
+  // THE SHUT-WAREHOUSE EXCLUSION READS THE DELIVERY APP, not the literal weekly
+  // map. The two disagreed in all five cities on 22 Oct 2026 — the app had the
+  // Thursday rule switched off since the 17th — and a day wrongly excluded here
+  // simply vanishes from the accuracy denominator with nothing on screen to say
+  // so. Best-effort: null falls back to the map, exactly as before.
+  const calendar = (await readWarehouseCalendarRows(db).catch(
+    () => null
+  )) as ClosureCalendar | null;
   let rows: StatRow[];
   try {
     rows = await readCityStats(db);
@@ -64,7 +79,7 @@ export const GET = jsonRoute("analytics", async () => {
   // the trend bar read 89.7% where the tile's basis gives 82.8%, a 6.9pp gap
   // bought entirely by 278 movements from three warehouses that were shut.
   const cutoff = daysBefore(maxDate, 29);
-  const byDate = dailyTotals(rows, cutoff, maxDate);
+  const byDate = dailyTotals(rows, cutoff, maxDate, calendar);
   const days = [...byDate.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([date, v]) => ({
@@ -79,8 +94,8 @@ export const GET = jsonRoute("analytics", async () => {
     latestDate: maxDate,
     days,
     byCity: {
-      last7: cityAggregate(rows, daysBefore(maxDate, 6), maxDate),
-      last30: cityAggregate(rows, daysBefore(maxDate, 29), maxDate),
+      last7: cityAggregate(rows, daysBefore(maxDate, 6), maxDate, calendar),
+      last30: cityAggregate(rows, daysBefore(maxDate, 29), maxDate, calendar),
     },
   });
 });

@@ -10,7 +10,7 @@
 // lib/stock/coverage.ts makes for the Stock Analyser, applied to a smaller
 // question — and the reason the copy says "not comparable", never "no change".
 
-import { isCityOff } from "../../engine/schedule";
+import { isCityClosed, type ClosureCalendar } from "../../engine/schedule";
 import type { City } from "../../sample-data";
 
 /** A city's at-risk trend against its own recent comparable days. */
@@ -79,6 +79,18 @@ export interface TrendInput {
   /** Ratio and floor for "worse", shared with the watch list so the two agree. */
   ratio: number;
   minUnits: number;
+  /**
+   * The delivery app's own closure calendar.
+   *
+   * EVERY CLOSURE TEST BELOW USED THE LITERAL WEEKLY MAP, which on 22 Oct 2026
+   * disagreed with the app in all five cities — the Thursday rule was switched
+   * off on the 17th, and one-off holidays now carry the closures instead. Three
+   * cities wrongly called shut every Thursday is three cities whose Thursday
+   * gaps are excused as expected absences, and a headline that calls the whole
+   * day comparable while skipping them. Absent, isCityClosed falls back to the
+   * map exactly as this module did before.
+   */
+  calendar?: ClosureCalendar | null;
 }
 
 export interface TrendOutput {
@@ -91,7 +103,9 @@ const SEP = "\u0000";
 const key = (city: string, date: string) => `${city}${SEP}${date}`;
 
 export function buildTrends(input: TrendInput): TrendOutput {
-  const { businessDate, tier1, priorDates, coverage, cities, ratio, minUnits } = input;
+  const { businessDate, tier1, priorDates, coverage, cities, ratio, minUnits, calendar } =
+    input;
+  const shut = (city: string, date: string) => isCityClosed(city as City, date, calendar);
 
   const covered = new Set<string>();
   const movementsOf = new Map<string, number>();
@@ -104,7 +118,7 @@ export function buildTrends(input: TrendInput): TrendOutput {
   // warehouse was shut — a Thursday in Mumbai is an EXPECTED absence, and
   // treating it as an outage would strip three of five cities every week.
   const usable = (city: string, date: string) =>
-    covered.has(key(city, date)) || isCityOff(city as City, date);
+    covered.has(key(city, date)) || shut(city, date);
 
   const byCity = new Map<string, CityTrend | null>();
   for (const city of cities) {
@@ -116,7 +130,7 @@ export function buildTrends(input: TrendInput): TrendOutput {
     // holiday is not an improvement. An off day is still usable as a BASELINE
     // (a real zero), which is why `usable` allows it below; it is only today's
     // own verdict that has to be withheld.
-    if (isCityOff(city as City, businessDate)) {
+    if (shut(city, businessDate)) {
       byCity.set(city, null);
       continue;
     }
@@ -147,9 +161,9 @@ export function buildTrends(input: TrendInput): TrendOutput {
   // The headline needs the WHOLE day comparable: one city short a book
   // understates the total, and a headline ranking a day we could not fully see
   // is the error this module exists to refuse.
-  const live = cities.filter((c) => !isCityOff(c as City, businessDate));
+  const live = cities.filter((c) => !shut(c, businessDate));
   const dayUsable = (date: string) =>
-    cities.filter((c) => !isCityOff(c as City, date)).every((c) => covered.has(key(c, date)));
+    cities.filter((c) => !shut(c, date)).every((c) => covered.has(key(c, date)));
 
   let dayTrend: DayTrend | null = null;
   if (live.length > 0 && dayUsable(businessDate)) {

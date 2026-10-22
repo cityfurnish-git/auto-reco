@@ -61,7 +61,7 @@
 // their tests agree on the target regardless of the hour the job fires.
 
 import { addDays } from "../engine/dates";
-import { isCityOff } from "../engine/schedule";
+import { isCityClosed, type ClosureCalendar } from "../engine/schedule";
 import { CITIES } from "../sample-data";
 import { utcToBusinessDate, usesCalendarDay } from "../connectors/ist-window";
 import { utcToIstDate } from "../connectors/ist-window";
@@ -156,7 +156,23 @@ export function digestTargetDate(now: Date = new Date()): string {
 //
 // A third pass was the obvious alternative and does not fit the 60s ceiling
 // (a pass is p50 36s).
-export function recheckTargetDate(now: Date = new Date()): string {
+export function recheckTargetDate(
+  now: Date = new Date(),
+  /**
+   * The delivery app's own closure calendar, where the caller has it.
+   *
+   * This read used the literal week-off map on the grounds that "the map and
+   * the calendar agree on the weekly rule". They stopped agreeing on 17 Oct
+   * 2026, when the app switched the Thursday rule off in all five cities and
+   * moved to one-off holidays the map has never known — so the map now takes
+   * the push-forward branch every Thursday nothing was pushed, and skips it on
+   * declared holidays when books really do arrive late.
+   *
+   * Absent, it falls back to the map exactly as before, which is also what a
+   * failed calendar read gets.
+   */
+  cal?: ClosureCalendar | null
+): string {
   const primary = reconcileTargetDate(now);
   // A WEEK-OFF PUSHES A DAY'S BOOKS FORWARD, so the re-check has to follow.
   //
@@ -168,17 +184,18 @@ export function recheckTargetDate(now: Date = new Date()): string {
   // day those warehouses were shut, the second pass re-runs the day BEFORE it
   // instead: Friday's run re-judges Wednesday, the afternoon its books arrive.
   //
-  // Read from the literal week-off map rather than the synced calendar because
-  // this file is pure and runs before anything is fetched; the map and the
-  // calendar agree on the weekly rule (see lib/engine/schedule.ts).
-  const closedForSome = CITIES.some((c) => isCityOff(c, primary));
+  // STILL PURE: the calendar is passed in, never fetched here.
+  const closedForSome = CITIES.some((c) => isCityClosed(c, primary, cal));
   return addDays(primary, closedForSome ? -1 : -2);
 }
 
 // The business date whose follow-up email is due this afternoon. Same day the
 // re-check pass just re-ran, by construction — they must never diverge.
-export function followupTargetDate(now: Date = new Date()): string {
-  return recheckTargetDate(now);
+export function followupTargetDate(
+  now: Date = new Date(),
+  cal?: ClosureCalendar | null
+): string {
+  return recheckTargetDate(now, cal);
 }
 
 /**

@@ -12,7 +12,7 @@
 // later run's evidence base is at least as wide as the earlier one's. Otherwise
 // the page shows two independent totals and no delta at all.
 
-import { isCityOff } from "../engine/schedule";
+import { isCityClosed, type ClosureCalendar } from "../engine/schedule";
 import type { City } from "../sample-data";
 import { SOURCE_KEYS, type Coverage, type FoldedPass, type SourceKey } from "./snapshot";
 
@@ -97,7 +97,19 @@ function floorHolds(from: number, to: number): boolean {
   return to >= from * (1 - MOVEMENT_TOLERANCE);
 }
 
-export function assessComparability(a: FoldedPass, b: FoldedPass, date: string): Comparability {
+export function assessComparability(
+  a: FoldedPass,
+  b: FoldedPass,
+  date: string,
+  /**
+   * The delivery app's own closure calendar. Absent, isCityClosed falls back to
+   * the literal weekly map — which on 22 Oct 2026 disagreed with the app in all
+   * five cities, the Thursday rule having been switched off on the 17th. A city
+   * wrongly read as resting has its missing floor books excused as "by design"
+   * instead of flagged as the outage they are.
+   */
+  cal?: ClosureCalendar | null
+): Comparability {
   // Every city either run touched. A city one run skipped is a real state and must
   // render as "not run", never as zero — migration 0012 learned the same lesson
   // about a zero count meaning two different things.
@@ -107,7 +119,7 @@ export function assessComparability(a: FoldedPass, b: FoldedPass, date: string):
   for (const city of cityNames) {
     const sa = a.cities.get(city);
     const sb = b.cities.get(city);
-    const restDay = isCityOff(city as City, date);
+    const restDay = isCityClosed(city as City, date, cal);
 
     // Rest days FIRST. A Thursday in Mumbai has no floor sources by design;
     // classifying that as an outage would blank three of five cities every week.

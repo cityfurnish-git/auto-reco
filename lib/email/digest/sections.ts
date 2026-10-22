@@ -32,7 +32,7 @@ import {
   SOURCE_LABEL,
   SOURCE_ORDER,
 } from "./patterns";
-import { isCityOff } from "../../engine/schedule";
+import { isCityClosed } from "../../engine/schedule";
 import type { City } from "../../sample-data";
 import { LOOKBACK_DAYS } from "./ageing";
 
@@ -178,22 +178,37 @@ function coverageSection(data: DigestData, patternLimit: number = DEFAULT_PATTER
   const cov = data.coverage;
   if (!cov || cov.cities.length === 0) return null;
 
+  // THE COVERAGE SECTION REPORTS ITS OWN DATE, which is usually older than the
+  // digest's — the guard register lands about a day late — so the per-city
+  // weekOff badge computed for `data.date` cannot answer for it. Read the
+  // delivery app's calendar at cov.date instead of the literal weekly map: on
+  // 22 Oct 2026 the two disagreed in all five cities, the app having switched
+  // the Thursday rule off on the 17th, and a city wrongly called shut here is
+  // printed as "nothing expected" and dropped from the ranking.
+  const shut = (city: string) => isCityClosed(city as City, cov.date, data.calendar);
+  // SAY WHICH KIND OF CLOSURE. With the Thursday rule switched off everywhere,
+  // the one-off holiday list is doing the work — 20 Oct 2026 was declared in all
+  // five cities — and a line reading "weekly off" on a declared holiday is
+  // simply wrong about the reason a warehouse was empty.
+  const closureWord = (city: string) =>
+    data.calendar?.holidays?.[city]?.includes(cov.date) ? "holiday" : "weekly off";
+
   const blocks: Block[] = [];
   let scored = 0;
 
   // Cities that can be scored first, biggest first; the rest sink. A city with
   // no table must not lead a section whose next two rows are the real data.
   const ordered = [...cov.cities].sort((a, b) => {
-    const sa = fullyReported(a) && !isCityOff(a.city as City, cov.date) ? 1 : 0;
-    const sb = fullyReported(b) && !isCityOff(b.city as City, cov.date) ? 1 : 0;
+    const sa = fullyReported(a) && !shut(a.city) ? 1 : 0;
+    const sb = fullyReported(b) && !shut(b.city) ? 1 : 0;
     return sb - sa || b.total - a.total || a.city.localeCompare(b.city);
   });
 
   for (const c of ordered) {
-    if (isCityOff(c.city as City, cov.date)) {
+    if (shut(c.city)) {
       blocks.push({
         kind: "para",
-        text: `${cityName(c.city)} — weekly off, nothing expected.`,
+        text: `${cityName(c.city)} — ${closureWord(c.city)}, nothing expected.`,
         tone: "muted",
       });
       continue;
@@ -267,7 +282,7 @@ function coverageSection(data: DigestData, patternLimit: number = DEFAULT_PATTER
 
   // Nothing scoreable AND nothing measurable — every city shut, or a ledger
   // that answered with no movements. An absent claim beats an empty one.
-  if (blocks.length === 0 || (scored === 0 && cov.cities.every((c) => isCityOff(c.city as City, cov.date))))
+  if (blocks.length === 0 || (scored === 0 && cov.cities.every((c) => shut(c.city))))
     return null;
 
   return { id: "coverage", title: "2 · Four-way check", blocks };

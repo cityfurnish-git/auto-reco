@@ -2,7 +2,7 @@
 // open now, and whether the date has actually been re-checked yet.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isCityOff } from "../../engine/schedule";
+import { isCityClosed, type ClosureCalendar } from "../../engine/schedule";
 import type { City } from "../../sample-data";
 import { parseTotalsSnapshot, type TotalsSnapshot } from "./snapshot";
 import type { CurrentRow } from "./compare";
@@ -99,7 +99,19 @@ export async function checkRerun(
   return isRerunFresh((data ?? []) as { status: string; completed_at: string | null }[], sinceIso);
 }
 
-/** Cities whose warehouse was shut on the reported date. */
-export function restDayCities(businessDate: string, cities: string[]): string[] {
-  return cities.filter((c) => isCityOff(c as City, businessDate));
+/**
+ * Cities whose warehouse was shut on the reported date.
+ *
+ * Reads the delivery app's own calendar when given one. Absent, isCityClosed
+ * falls back to the literal weekly map — which on 22 Oct 2026 disagreed with
+ * the app in all five cities, the Thursday rule having been switched off on the
+ * 17th. This list tells the reader which cities to forgive, so naming a city
+ * that actually worked hides a real gap behind a banner.
+ */
+export function restDayCities(
+  businessDate: string,
+  cities: string[],
+  cal?: ClosureCalendar | null
+): string[] {
+  return cities.filter((c) => isCityClosed(c as City, businessDate, cal));
 }

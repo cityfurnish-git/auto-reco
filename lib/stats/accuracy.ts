@@ -10,7 +10,7 @@
 //
 // PURE and DB-free: every function takes rows that have already been read.
 
-import { isCityOff } from "../engine/schedule";
+import { isCityClosed, type ClosureCalendar } from "../engine/schedule";
 import type { City } from "../sample-data";
 
 /** Percent to one decimal, clamped to [0, 100]. */
@@ -90,20 +90,34 @@ export function aggregate(rows: StatRow[], from: string, to: string): Map<string
  * aggregate() while the analytics page's daily trend summed the same rows with
  * no exclusion at all — same word "accuracy", two denominators, on one screen.
  */
-export function scorable(r: StatRow, from: string, to: string): boolean {
+export function scorable(
+  r: StatRow,
+  from: string,
+  to: string,
+  /**
+   * The delivery app's own closure calendar. Absent, isCityClosed falls back to
+   * the literal weekly map — which on 22 Oct 2026 disagreed with the app in all
+   * five cities, the Thursday rule having been switched off on the 17th. A day
+   * wrongly excluded here is a day missing from the accuracy denominator, and
+   * the exclusion is invisible in the number it produces.
+   */
+  cal?: ClosureCalendar | null
+): boolean {
   if (r.business_date < from || r.business_date > to) return false;
-  return !isCityOff(r.city as City, r.business_date);
+  return !isCityClosed(r.city as City, r.business_date, cal);
 }
 
 /** Per-DAY totals across all cities, on the same basis as `aggregate`. */
 export function dailyTotals(
   rows: StatRow[],
   from: string,
-  to: string
+  to: string,
+  /** The closure calendar — see `scorable`. */
+  cal?: ClosureCalendar | null
 ): Map<string, { movements: number; real: number }> {
   const map = new Map<string, { movements: number; real: number }>();
   for (const r of rows) {
-    if (!scorable(r, from, to)) continue;
+    if (!scorable(r, from, to, cal)) continue;
     const a = map.get(r.business_date) ?? { movements: 0, real: 0 };
     a.movements += r.movements;
     a.real += r.real_count;

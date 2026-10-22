@@ -8,7 +8,7 @@ import type { GuardUpload, UploadStatus } from "@/lib/db/schema";
 import { CITIES, type City, type UploadStatus as DemoUploadStatus } from "@/lib/sample-data";
 import { Icon } from "@/components/icon";
 import { errText, useToast } from "@/components/toast";
-import { isCityOff } from "@/lib/engine/schedule";
+import { isCityClosed, type ClosureCalendar } from "@/lib/engine/schedule";
 
 const supabaseConfigured =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -68,6 +68,36 @@ function RealUploadsClient({ user }: { user: SessionUser }) {
   // is the business_date the register reconciles against, so it must match the
   // day Odoo/DT/Sheet are pulled for. Defaults to today for same-day uploads.
   const [registerDate, setRegisterDate] = useState(today);
+  // THE DELIVERY APP'S OWN CLOSURE CALENDAR, not the literal weekly map. The two
+  // disagreed in all five cities on 22 Oct 2026 — the app had the Thursday rule
+  // switched off since the 17th — and this banner was telling guards a register
+  // was "not expected" for days their warehouse had worked. Readable by any
+  // signed-in user (migration 0019); null until it loads, and isCityClosed then
+  // falls back to the map, so the banner is never worse than it was.
+  const [calendar, setCalendar] = useState<ClosureCalendar | null>(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const { data } = await getSupabaseClient()
+        .from("warehouse_calendar")
+        .select("city, weekday, holiday_date");
+      if (!live || !data) return;
+      const cal: ClosureCalendar = { weeklyOff: {}, holidays: {} };
+      for (const r of data as { city: string; weekday: number | null; holiday_date: string | null }[]) {
+        const city = r.city as City;
+        if (r.weekday !== null) (cal.weeklyOff[city] ??= []).push(r.weekday);
+        if (r.holiday_date) (cal.holidays[city] ??= []).push(r.holiday_date);
+      }
+      setCalendar(cal);
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+  const shutOnPickedDay =
+    !!registerDate && isCityClosed(selectedCity, registerDate, calendar);
+  const pickedDayIsHoliday =
+    !!registerDate && !!calendar?.holidays?.[selectedCity]?.includes(registerDate);
 
   async function refreshHistory() {
     const supabase = getSupabaseClient();
@@ -241,12 +271,17 @@ function RealUploadsClient({ user }: { user: SessionUser }) {
       </div>
 
       {/* Weekly-off heads-up — the picked day is this warehouse's holiday */}
-      {registerDate && isCityOff(selectedCity, registerDate) && (
+      {shutOnPickedDay && (
         <div className="card p-3 mb-6 flex items-center gap-2.5 border-l-[3px] border-l-border">
           <Icon name="event_busy" size={18} className="text-text-muted shrink-0" />
           <p className="text-xs text-text-secondary">
-            {selectedCity} is <b>weekly-off on Thursdays</b> — a register for {registerDate} is not
-            expected. Upload anyway if the warehouse did operate that day.
+            {/* NAME THE REAL REASON. With the weekly rule switched off everywhere,
+                the one-off holiday list carries the closures — 20 Oct 2026 was
+                declared in all five cities — and "weekly-off on Thursdays" is
+                simply the wrong sentence on a declared holiday. */}
+            {selectedCity} was{" "}
+            <b>{pickedDayIsHoliday ? "closed for a holiday" : "weekly-off"}</b> on {registerDate} —
+            a register is not expected. Upload anyway if the warehouse did operate that day.
           </p>
         </div>
       )}

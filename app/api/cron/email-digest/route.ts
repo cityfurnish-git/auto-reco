@@ -25,6 +25,8 @@ import { buildRegisterPdfs, registerAttachments } from "@/lib/email/register-pdf
 import { drainScheduledEmails } from "@/lib/email/scheduled";
 import { runReconcilePipeline } from "@/lib/reconcile/pipeline";
 import { recheckTargetDate } from "@/lib/reconcile/cron-dates";
+import { readWarehouseCalendarRows } from "@/lib/db/persist";
+import type { ClosureCalendar } from "@/lib/engine/schedule";
 import { noteRecheckSkipped } from "@/lib/db/persist";
 import { enqueueFollowUp, shouldEnqueueFollowUp } from "@/lib/email/followup/queue";
 import { saveEmailLog } from "@/lib/db/persist";
@@ -209,8 +211,14 @@ async function handle(req: NextRequest) {
     } else {
       // recheckTargetDate(), never local arithmetic: the follow-up below looks
       // for a re-run of exactly this date, so the two must be one expression.
+      // The closure calendar decides whether a day's books were pushed forward,
+      // so the date this re-runs has to read the delivery app rather than the
+      // literal weekly map. Best-effort: a failed read falls back to the map.
+      const recheckCal = (await readWarehouseCalendarRows(db).catch(
+        () => null
+      )) as ClosureCalendar | null;
       recheck = await runReconcilePipeline(db, {
-        runDate: recheckTargetDate(),
+        runDate: recheckTargetDate(new Date(), recheckCal),
         trigger: "cron",
         skipOcr: true,
         role: "recheck",

@@ -20,10 +20,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jsonRoute } from "@/lib/api/json-route";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readWarehouseCalendarRows } from "@/lib/db/persist";
 import { getCurrentAppUser } from "@/lib/db/current-user";
 import { readCityStats, readMovements } from "@/lib/stock/db";
 import { daysBetween } from "@/lib/engine/dates";
-import { isCityOff } from "@/lib/engine/schedule";
+import { isCityClosed, type ClosureCalendar } from "@/lib/engine/schedule";
 import type { City } from "@/lib/sample-data";
 
 export const runtime = "nodejs";
@@ -72,6 +73,14 @@ export const GET = jsonRoute("stock/movements", async (req: NextRequest) => {
   const cityFilter = q.getAll("city").filter(Boolean);
 
   const db = createAdminClient();
+  // CLOSURES READ FROM THE DELIVERY APP, not the literal weekly map. The two
+  // disagreed in all five cities on 22 Oct 2026 — the app had the Thursday rule
+  // switched off since the 17th, and carries one-off holidays the map has never
+  // known. A day wrongly marked restDay reads as "nothing expected" on the
+  // Stock Analyser. Best-effort: null falls back to the map, as before.
+  const calendar = (await readWarehouseCalendarRows(db).catch(
+    () => null
+  )) as ClosureCalendar | null;
   const span = daysBetween(from, to) + 1;
 
   let ledger, stats;
@@ -154,7 +163,7 @@ export const GET = jsonRoute("stock/movements", async (req: NextRequest) => {
       groupBy === "day" ? [k, null] : groupBy === "city" ? [null, k] : (k.split("|") as [string, string]);
     const a = acc.get(k);
     const ledgered = groupBy === "city" ? ledgeredDates.size > 0 : !!d && ledgeredDates.has(d);
-    const restDay = !!d && !!c && isCityOff(c as City, d);
+    const restDay = !!d && !!c && isCityClosed(c as City, d, calendar);
     const rollupTotal = rollup.get(k) ?? null;
 
     if (!a) {

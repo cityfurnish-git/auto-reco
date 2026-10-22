@@ -5,9 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   floorRowsOf,
   isCityClosed,
-  isCityOff,
   lastWorkingDay,
   registerDueOn,
+  type ClosureCalendar,
 } from "../../engine/schedule";
 import { addDays } from "../../engine/dates";
 import { buildTrends, type CoverageRow } from "./trends";
@@ -152,7 +152,15 @@ const FRESH_WITHIN_MS = 24 * 3600_000;
 async function buildWatchList(
   db: SupabaseClient,
   businessDate: string,
-  todayRows: VarianceRow[]
+  todayRows: VarianceRow[],
+  /**
+   * The delivery app's own closure calendar. Absent, isCityClosed falls back to
+   * the literal weekly map — which on 22 Oct 2026 disagreed with the app in all
+   * five cities, the app having switched the Thursday rule off on the 17th. A
+   * baseline that excuses Thursdays the warehouses actually worked is the
+   * defect this parameter exists to close.
+   */
+  calendar?: ClosureCalendar | null
 ): Promise<History> {
   // One day wider than the trend window: the ageing list looks back
   // LOOKBACK_DAYS from the reported date, so its oldest day is D-7. The trend
@@ -226,7 +234,7 @@ async function buildWatchList(
 
   for (const r of prior) {
     const l = labelOfRow(r);
-    if (l.tier === 1 && !isCityOff(r.city as City, r.business_date)) {
+    if (l.tier === 1 && !isCityClosed(r.city as City, r.business_date, calendar)) {
       bump(r.city, r.business_date);
     }
   }
@@ -241,7 +249,7 @@ async function buildWatchList(
   // The tier-1 bump is skipped for the same reason: a structural zero must not
   // become a data point in that city's own baseline.
   for (const r of todayRows) {
-    if (isCityOff(r.city as City, businessDate)) continue;
+    if (isCityClosed(r.city as City, businessDate, calendar)) continue;
     if (labelOfRow(r).tier === 1) bump(r.city, businessDate);
   }
 
@@ -467,7 +475,9 @@ export async function buildDigestFromDb(
 
   // Best-effort: a slow or failing history query must omit the section, never
   // stop the digest. The cron shares a 60s ceiling with the PDFs and the send.
-  const history = await buildWatchList(db, businessDate, open).catch(() => undefined);
+  const history = await buildWatchList(db, businessDate, open, calendar).catch(
+    () => undefined
+  );
 
   // ONE extra range read for the week's coverage: ~35 rows, a single page.
   // Spent on honesty rather than novelty -- without reported_* per day there is
@@ -488,6 +498,7 @@ export async function buildDigestFromDb(
           cities: cities.map((c) => c.city),
           ratio: 1.5,
           minUnits: WATCH_MIN_UNITS,
+          calendar,
         });
       })().catch(() => undefined)
     : undefined;
