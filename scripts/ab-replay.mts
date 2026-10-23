@@ -63,7 +63,7 @@ for (const d of days) {
     // source_rows history. Empty on BOTH sides, so it cancels.
     const res = runReconciliation(cityRows, city as never, reported, new Set(), d, new Set());
     for (const v of res.variances)
-      out.push(`${d}|${city}|${v.direction}|${v.barcode}|${v.variance_name}|${v.job_type ?? ""}`);
+      out.push(`${d}|${city}|${v.direction}|${v.barcode}|${v.variance_name}|${v.job_type ?? ""}|${v.priority}`);
   }
 }
 out.sort();

@@ -23,6 +23,8 @@ export function shortNotice(w: string): { who: string; what: string; extra?: str
   if (m) return { who: `${titleCase(m[1])} · Gate`, what: "No scans for the day" };
   m = w.match(/^Odoo ([\w -]+?) (?:lookup|lookahead) failed:.*timeout/i);
   if (m) return { who: "Odoo", what: `${m[1].charAt(0).toUpperCase()}${m[1].slice(1)} check timed out` };
+  m = w.match(/^Integrity(?: \(([\d-]+)\))?: (\d+) rows? — (.+)$/);
+  if (m) return { who: "Integrity check", what: m[3], extra: `${n(m[2])} row${m[2] === "1" ? "" : "s"}${m[1] ? ` · ${m[1]}` : ""}` };
   m = w.match(/^([A-Z]+):\s*(.+)$/);
   if (m && CITIES.includes(m[1] as City)) return { who: titleCase(m[1]), what: m[2] };
   return { who: "", what: w };

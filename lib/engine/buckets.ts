@@ -3,6 +3,7 @@
 // re-tags priority for reporting. INFO rows get priority forced to Info,
 // original_priority preserved, and dampened: true.
 
+import { absenceClaim } from "./absence-claim";
 import { VARIANCE } from "./variance-names";
 import type { Bucket, Priority, VarianceRowOut } from "./types";
 
@@ -334,3 +335,37 @@ export function applyBucket(
     note: row.note ?? meta.note,
   };
 }
+
+/**
+ * The priority a chase item SHOULD carry, given which books reported.
+ *
+ * CHASE_PRIORITY ranks by how many books a name says are short — but the name
+ * is chosen before anyone asks whether every book it accuses actually filed.
+ * Four of five cities have had no gate book since August, so "Only MS has it"
+ * there means MS has it and DT and Odoo do not: TWO books short, not three.
+ * Measured 23 Oct 2026: 1,424 open rows graded High on a book that never
+ * reported (rule 16 — a book that did not report is never blamed — applied to
+ * the ranking as well as the wording).
+ *
+ * Books short = the name's absence claim ∩ the books that reported. Three is
+ * High, one or two is Medium; a name with no testable claim keeps its rank.
+ *
+ * ONE DEFINITION, read by the engine when it stamps a row AND by the nightly
+ * integrity check, so the two cannot drift (the 0051 regrade did, by reading
+ * grading from the name alone).
+ */
+export function chasePriority(
+  varianceName: string,
+  reported: { P: boolean; S: boolean; D: boolean; O: boolean },
+  fallback: Priority = "High"
+): { bucket: "REAL" | "INFO"; priority: Priority } {
+  const meta = metaFor(varianceName);
+  if (meta.bucket === "INFO") return { bucket: "INFO", priority: "Info" };
+  const base = CHASE_PRIORITY[varianceName] ?? fallback;
+  const claim = absenceClaim(varianceName);
+  if (claim.length === 0) return { bucket: "REAL", priority: base };
+  const short = claim.filter((k) => reported[k]).length;
+  if (short === 0) return { bucket: "REAL", priority: base };
+  return { bucket: "REAL", priority: short >= 3 ? "High" : "Medium" };
+}
+

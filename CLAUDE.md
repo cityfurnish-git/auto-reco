@@ -51,7 +51,12 @@ npx tsc --noEmit
 npm run build          # CURRENTLY FAILS — see "Known broken" below
 ```
 
-Before every push: `npx tsc --noEmit && npm run lint && npm test && npm run build`
+Before every push: `npx tsc --noEmit && npm run lint && npm test && npm run build`,
+then the integrity check against live data —
+`set -a; source .env.local; set +a; npx tsx scripts/integrity-check.mts` — which must
+print "clean" (or only findings you can explain). It is the same rule set the nightly
+run applies to the date it just wrote (`lib/integrity/checks.ts`); findings land in the
+run's warnings and the dashboard's notifications box.
 
 Read-only production probes (safe, and the right way to answer "what is actually
 true?" rather than recalling it):
@@ -119,6 +124,8 @@ and is recorded for a manager to read afterwards. Re-litigated twice.
 6. **`position: fixed` inside the sidebar** renders off-screen; the `<aside>` sets a `translate`, making it a containing block. Portal to `document.body`.
 7. **`DT.scheduledDate` is not a clock** — 6,659 of 6,753 rows pinned at exactly 10:00 IST. Window on `items.updatedAt`.
 8. **`Odoo.sml.date` is posting time, not movement time** — roughly half post the next day; vendor PO receipts post +2/+3.
+9. **A step that is right alone can be wrong in combination** (integrity audit, 23 Oct 2026 — 1,971 findings across 83 days, none raised by any test). Migration 0051 regraded by name and put 107 cleared rows back on the chase list; the clean-up rewrote a cleared row's note but not its ticks (162); it also demanded all four books, which four cities never have, so cleared gaps there never closed (148); a failed delivery let the ladder add a second, false name (81 unit-days); ranking counted books that never reported (1,348). **Any change that writes stored rows — engine, clean-up, migration — runs `scripts/integrity-check.mts` before and after.** Grading has ONE definition (`chasePriority`), read by the engine and the check.
+10. **Silence is not resolution.** The wider clean-up gate closes a row only when its unit is IN today's ledger; a unit no book holds any more (a deleted sheet line) has vanished, not cleared.
 
 ---
 

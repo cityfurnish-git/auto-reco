@@ -10,6 +10,7 @@
 // result rather than throwing. Node runtime only (connectors use mongodb /
 // googleapis / Azure).
 
+import { checkRows, describeFindings, readDate } from "../integrity/checks";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runAllCities, type MultiCityRun } from "../engine/run";
 import { guardTruncatedSheet } from "./sheet-guard";
@@ -347,6 +348,21 @@ export async function runReconcilePipeline(
       console.warn("saveRunCitySnapshots failed:", e instanceof Error ? e.message : e);
       return 0;
     });
+
+    // 4e. Integrity check for the date just written (23 Oct 2026). The rules
+    //     every stored row must obey — lib/integrity/checks.ts — read back
+    //     from the database, so a step that is right on its own and wrong in
+    //     combination shows up the same night, in the notifications box,
+    //     instead of in a screenshot weeks later. Best-effort and bounded: a
+    //     check must never fail or slow a good run.
+    await Promise.race([
+      readDate(db, run.date || runDate).then(({ rows, ledger }) => {
+        pipelineWarnings.push(...describeFindings(run.date || runDate, checkRows(rows, ledger)));
+      }),
+      // 3s: the reconcile runs p90 ~50s against a 60s ceiling; one date reads
+      // in well under a second.
+      new Promise<void>((resolve) => setTimeout(resolve, 3_000)),
+    ]).catch((e) => console.warn("integrity check failed:", e instanceof Error ? e.message : e));
 
     // 5. Log ingestion health per source.
     await saveIngestionLogs(db, runId, results);

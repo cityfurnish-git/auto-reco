@@ -555,6 +555,22 @@ const NOTHING_PRESENT: SourceFlags = { P: false, S: false, D: false, O: false };
  */
 const ASSUME_ALL_REPORTED: SourceFlags = { P: true, S: true, D: true, O: true };
 
+/**
+ * Coverage good enough to read silence as resolution: every book that had
+ * reported when the row was RAISED has reported again now.
+ *
+ * The old gate asked for all four books, and four of five cities have had no
+ * gate book since August — so in those cities a cleared gap could never be
+ * retired and simply stayed open (148 such rows on 23 Oct 2026, including a
+ * whole day of "Odoo posted after the deadline" made moot by the calendar
+ * fix). A book that was silent when the row was raised cannot be what the row
+ * depends on; one that reported then and is silent now still blocks it.
+ */
+export function coveredAsRaised(raised: SourceFlags, now: SourceFlags): boolean {
+  return (!raised.P || now.P) && (!raised.S || now.S) && (!raised.D || now.D) && (!raised.O || now.O)
+    && (now.P || now.S || now.D || now.O);
+}
+
 function reportedOf(row: StaleRow): SourceFlags {
   if (row.reported_p == null && row.reported_s == null && row.reported_d == null && row.reported_o == null) {
     return ASSUME_ALL_REPORTED;
@@ -789,7 +805,13 @@ export async function resolveStaleOpenVariances(
         // present_s true while reported_s is false, so re-check this the moment
         // a claim is added for a source whose presence a bad pull could inflate.
         resolvedIds.push(row.id as string);
-      } else if (fullCoverage) {
+      } else if (
+        fullCoverage ||
+        // The unit must be IN this run's ledger: a unit no book holds any more
+        // (a sheet line deleted — 1 Oct lost 147) has not "cleared", it has
+        // vanished, and must never be read as resolved by the wider gate.
+        (presentNow.has(unit) && coveredAsRaised(reportedOf(row), rep))
+      ) {
         resolvedIds.push(row.id as string);
       }
     }
@@ -803,18 +825,43 @@ export async function resolveStaleOpenVariances(
       mine.superseded += supersededIds.length;
     }
     if (resolvedIds.length > 0) {
-      const { error: updErr } = await db
-        .from("variances")
-        .update({
-          bucket: "INFO",
-          priority: "Info",
-          dampened: true,
-          run_id: runId,
-          last_seen_at: now,
-          note: RESOLVED_LATE_NOTE,
-        })
-        .in("id", resolvedIds);
-      if (updErr) throw new Error(`resolveStaleOpenVariances update failed: ${updErr.message}`);
+      // THE TICKS GO WITH THE VERDICT (23 Oct 2026). This used to rewrite the
+      // note and leave present_* / reported_* as the run that RAISED the row
+      // saw them — a morning run before MS and DT had filed — so the row read
+      // "– MS – DT" beside a detail panel showing all four books holding the
+      // unit. 162 cleared rows disagreed with the ledger. Grouped by flag set
+      // so a day of resolutions is a handful of updates, not one per row.
+      const byFlags = new Map<string, { flags: SourceFlags; ids: string[] }>();
+      const idToUnit = new Map((data ?? []).map((r) => [r.id as string, `${r.direction}::${r.barcode}`]));
+      for (const id of resolvedIds) {
+        const flags = presentNow.get(idToUnit.get(id) ?? "") ?? null;
+        const key = flags ? `${+flags.P}${+flags.S}${+flags.D}${+flags.O}` : "none";
+        const g = byFlags.get(key) ?? { flags: flags ?? NOTHING_PRESENT, ids: [] };
+        g.ids.push(id);
+        byFlags.set(key, g);
+      }
+      for (const [key, g] of byFlags) {
+        const { error: updErr } = await db
+          .from("variances")
+          .update({
+            bucket: "INFO",
+            priority: "Info",
+            dampened: true,
+            run_id: runId,
+            last_seen_at: now,
+            note: RESOLVED_LATE_NOTE,
+            // No ledger row for the unit (a CROSS row) — leave its ticks alone
+            // rather than blank them.
+            ...(key === "none"
+              ? {}
+              : {
+                  present_p: g.flags.P, present_s: g.flags.S, present_d: g.flags.D, present_o: g.flags.O,
+                  reported_p: rep.P, reported_s: rep.S, reported_d: rep.D, reported_o: rep.O,
+                }),
+          })
+          .in("id", g.ids);
+        if (updErr) throw new Error(`resolveStaleOpenVariances update failed: ${updErr.message}`);
+      }
       resolvedLate += resolvedIds.length;
       mine.resolvedLate += resolvedIds.length;
     }

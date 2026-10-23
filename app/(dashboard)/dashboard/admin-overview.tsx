@@ -286,7 +286,7 @@ export function CityRings({ cities, businessDate, calendar, trend, onOpen }: {
 // "failed" alone is too broad: "17 failed dispatches … raised for tracing" is
 // the run explaining a finding, already on the chase list. Only a LOOKUP or a
 // feed that failed is the run itself in trouble.
-const NEEDS_A_PERSON = /header|rows skipped|(lookup|lookahead|fetch|query|connector|pull) failed|timeout|timed out|no gate scans|did not report|unassigned/i;
+const NEEDS_A_PERSON = /^Integrity|header|rows skipped|(lookup|lookahead|fetch|query|connector|pull) failed|timeout|timed out|no gate scans|did not report|unassigned/i;
 
 export function NotificationsCard({ warnings }: { warnings: string[] | undefined }) {
   const items = [...new Set((warnings ?? []).filter((w) => NEEDS_A_PERSON.test(w)))].slice(0, 6);

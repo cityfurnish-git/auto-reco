@@ -11,7 +11,7 @@ import {
   isValidBarcode,
   looksUnresolvedItem,
 } from "./barcode";
-import { applyBucket, VARIANCE_META } from "./buckets";
+import { applyBucket, chasePriority, VARIANCE_META } from "./buckets";
 import { computeCountLayer } from "./counts";
 import { addDays, deriveRunDate, parseDate } from "./dates";
 import { detectDirectionConflicts } from "./direction-conflict";
@@ -742,6 +742,13 @@ export function runReconciliation(
         notDeliveredUnits.add(canon);
       } else if (!guardIn && !sheetBackIn) {
         failedNoReturn.push({ canon, rows, out: sheetOut });
+        // THE FAILED DELIVERY OWNS THE OUTWARD LEG (23 Oct 2026). The gate and
+        // DT hard-code "done", so DONE WINS kept the unit in the ladder, which
+        // then raised a second name beside this one — usually "Not in Odoo",
+        // accusing Odoo of correctly holding nothing for a delivery that never
+        // happened. 81 open unit-days carried two names (rule 18: one gap, one
+        // name). The only question left for this leg is whether it came back.
+        suppressed.add(`OUT::${canon}`);
       }
     }
   }
@@ -1137,7 +1144,14 @@ export function runReconciliation(
   // Deliberately after the direction-conflict push and the bulk-SO rewrite, so
   // it covers every row including the paths that bypass applyBucket; and before
   // the real/info split below, which holds references into this array.
-  const stamped: VarianceRowOut[] = variances.map((v) => ({ ...v, reported }));
+  // Priority re-read against who REPORTED (23 Oct 2026): a name accusing a
+  // book that never filed would otherwise rank a two-books-short gap as
+  // three. See chasePriority — the integrity check reads the same function.
+  const stamped: VarianceRowOut[] = variances.map((v) =>
+    v.bucket === "REAL"
+      ? { ...v, reported, priority: chasePriority(v.variance_name, reported, v.priority).priority }
+      : { ...v, reported }
+  );
 
   // Section 9 — count layer per direction.
   //

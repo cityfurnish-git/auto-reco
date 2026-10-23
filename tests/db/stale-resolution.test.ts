@@ -582,3 +582,41 @@ describe("an old OT CASE the current rule no longer raises (23 Oct 2026)", () =>
     expect(s.deleted).toHaveLength(0);
   });
 });
+
+describe("integrity fixes, 23 Oct 2026", () => {
+  const NO_GATE = { P: false, S: true, D: true, O: true };
+
+  it("a cleared row takes the latest ticks, not the run that raised it (162 rows)", async () => {
+    const s = stubDb([
+      { id: "old", direction: "IN", barcode: "ITEM-1", variance_name: VARIANCE.FLOOR_DT_NOT_ODOO,
+        reported_p: true, reported_s: false, reported_d: false, reported_o: true },
+    ]);
+    await resolveStaleOpenVariances(s.db, "run-2", "2026-08-01",
+      [cityResult([], [event({ direction: "IN", outcome: "CLEAN", suppressedReason: null, present: ALL })])], REPORTED);
+    expect(s.updated[0].patch).toMatchObject({
+      note: RESOLVED_LATE_NOTE, bucket: "INFO",
+      present_s: true, present_d: true, reported_s: true, reported_d: true,
+    });
+  });
+
+  it("a gap raised without a gate book clears without one (148 rows)", async () => {
+    const s = stubDb([
+      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: VARIANCE.ODOO_PAST_DEADLINE,
+        reported_p: false, reported_s: true, reported_d: true, reported_o: true },
+    ]);
+    const res = await resolveStaleOpenVariances(s.db, "run-2", "2026-08-01",
+      [cityResult([], [event({ outcome: "CLEAN", suppressedReason: null })])], { MUMBAI: NO_GATE } as never);
+    expect(res.resolvedLate).toBe(1);
+  });
+
+  it("but not when a book that reported then is silent now", async () => {
+    const s = stubDb([
+      { id: "old", direction: "OUT", barcode: "ITEM-1", variance_name: VARIANCE.ODOO_PAST_DEADLINE,
+        reported_p: false, reported_s: true, reported_d: true, reported_o: true },
+    ]);
+    const res = await resolveStaleOpenVariances(s.db, "run-2", "2026-08-01",
+      [cityResult([], [event({ outcome: "CLEAN", suppressedReason: null })])],
+      { MUMBAI: { P: false, S: false, D: true, O: true } } as never);
+    expect(res.resolvedLate).toBe(0);
+  });
+});
