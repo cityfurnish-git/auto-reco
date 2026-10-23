@@ -11,7 +11,7 @@ import Sidebar from "./sidebar";
 import ThemeToggle from "./theme-toggle";
 import ApprovalsBell from "./approvals-bell";
 import HelpButton from "./help-button";
-import { ChatLauncher } from "./chat-panel";
+import { BarcodeLookupLauncher } from "./barcode-lookup";
 import { Icon } from "@/components/icon";
 import { ToastProvider } from "@/components/toast";
 
@@ -86,7 +86,8 @@ export default function DashboardShell({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <ChatLauncher role={user.role} />
+            {/* Ask AI was here; replaced by the barcode lookup, 23 Oct 2026. */}
+            <BarcodeLookupLauncher />
             <HelpButton role={user.role} />
             <ThemeToggle />
             {user.role === "ADMIN" && <ApprovalsBell />}
@@ -109,7 +110,9 @@ export default function DashboardShell({
           </div>
         </header>
 
-        <div className="flex-1">{children}</div>
+        {/* pb-24: room for the floating barcode button, so it never sits on the
+            last row of a table (it did, over Pending List's Resolve). */}
+        <div className="flex-1 pb-24">{children}</div>
       </main>
     </div>
     </ToastProvider>
