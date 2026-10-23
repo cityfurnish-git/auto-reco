@@ -7,6 +7,8 @@ import { useLeaderboard, type WindowKey } from "@/lib/hooks/use-leaderboard";
 import { Icon, type IconName } from "@/components/icon";
 import { clampPct } from "@/lib/stats/accuracy";
 import { MIN_MOVEMENTS } from "@/lib/ui/stat-captions";
+import { Ring, Sparkline } from "@/components/kit/charts";
+import { PageHeader, Pills } from "@/components/kit/layout";
 
 const TREND_ICON: Record<string, { icon: IconName; cls: string }> = {
   up: { icon: "trending_up", cls: "text-success" },
@@ -79,45 +81,31 @@ export default function LeaderboardPage() {
 
   return (
     <div className="p-container-margin space-y-6">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="font-headline text-xl text-text-primary mb-1">
-            City Leaderboard
-          </h1>
-          <p className="text-text-muted text-sm">
+      <PageHeader
+        icon="leaderboard"
+        title="City Leaderboard"
+        subtitle={
+          <>
             Which city traces the most of what it moves. Score = units traced end to end ÷ units moved. Days a warehouse was shut are left out.
             {win?.to ? ` ${win.label} (through ${win.to}).` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-surface-elevated rounded-control p-1 flex">
-            {WINDOWS.map((w) => (
-              <button
-                key={w.key}
-                onClick={() => setWindowKey(w.key)}
-                className={
-                  windowKey === w.key
-                    ? "px-4 py-1.5 text-sm font-medium rounded-control bg-surface-card shadow-card"
-                    : "px-4 py-1.5 text-sm text-text-secondary rounded-control hover:bg-surface-card transition-colors duration-150"
-                }
-              >
-                {w.label}
-              </button>
-            ))}
-          </div>
-          <button onClick={exportCsv} disabled={rows.length === 0} className="btn btn-primary disabled:opacity-50">
-            <Icon name="download" size={18} />
-            Export CSV
-          </button>
-        </div>
-      </header>
+          </>
+        }
+        right={
+          <>
+            <Pills options={WINDOWS} value={windowKey} onChange={setWindowKey} />
+            <button onClick={exportCsv} disabled={rows.length === 0} className="btn btn-primary disabled:opacity-50">
+              <Icon name="download" size={18} />
+              Export CSV
+            </button>
+          </>
+        }
+      />
 
       {error && <ErrorState what="the scoreboard" detail={error} onRetry={refetch} />}
 
       {/* KPI Row */}
       <section className="grid grid-cols-1 md:grid-cols-4 gap-gutter">
-        <div className="kpi-tile kpi-tile--success card-hover flex flex-col justify-between">
+        <div className="soft-card p-5 flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <span className="kpi-label">Cleanest city</span>
             <Icon name="workspace_premium" size={22} className="text-[#b9aa83]" />
@@ -133,7 +121,7 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
-        <div className="kpi-tile card-hover flex flex-col justify-between">
+        <div className="soft-card p-5 flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <span className="kpi-label">Units moved</span>
             <Icon name="inventory_2" size={22} className="text-accent" />
@@ -144,7 +132,7 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
-        <div className="kpi-tile kpi-tile--danger card-hover flex flex-col justify-between">
+        <div className="soft-card p-5 flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <span className="kpi-label">Not accounted for</span>
             <Icon name="report" size={22} className="text-danger" />
@@ -162,17 +150,67 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
-        <div className="kpi-tile kpi-tile--accent card-hover flex flex-col justify-between overflow-hidden relative">
-          <div className="relative z-10">
+        <div className="soft-card p-5 flex items-center gap-4">
+          <Ring pct={avgAccuracy} label={pct(avgAccuracy)} size={76} stroke={7} title="Traced end to end, all cities" />
+          <div>
             <span className="kpi-label">Traced end to end</span>
-            <h3 className="kpi-value mt-4">{pct(avgAccuracy)}</h3>
-            <p className="text-xs text-text-muted">Weighted by units moved — not an average of the city scores</p>
-          </div>
-          <div className="absolute right-0 bottom-0 opacity-10">
-            <Icon name="monitoring" size={80} />
+            <p className="text-xs text-text-muted mt-1">Weighted by units moved — not an average of the city scores</p>
           </div>
         </div>
       </section>
+
+      {/* The ranking at a glance — one card per city, in rank order, with the
+          last 14 days underneath (23 Oct 2026). The table below keeps every
+          exact figure; this is the picture of it. */}
+      {!isEmpty && (
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {rows.map((r) => {
+            const thin = r.accuracy !== null && r.movements < MIN_MOVEMENTS;
+            const trend = TREND_ICON[r.trend];
+            const daily = data?.daily?.[r.city];
+            return (
+              <div key={r.city} className={`soft-card p-5 flex flex-col items-center text-center gap-3 ${r.city === medalCity ? "ring-2 ring-[#d9c98f]" : ""}`}>
+                <div className="flex items-center justify-between w-full">
+                  {r.city === medalCity ? (
+                    <Icon name="workspace_premium" size={22} className="text-[#b9aa83]" />
+                  ) : (
+                    <span className="text-sm font-semibold text-text-muted">#{r.rank}</span>
+                  )}
+                  <Icon name={trend.icon} size={18} className={trend.cls} />
+                </div>
+                <Ring
+                  pct={thin ? null : r.accuracy}
+                  label={r.accuracy === null ? "—" : `${Math.floor(r.accuracy)}%`}
+                  size={92}
+                  stroke={8}
+                  title={thin ? "Low sample — not scored" : r.accuracy === null ? "No movements" : `${r.accuracy}% traced`}
+                />
+                <div>
+                  <div className="font-headline text-lg text-text-primary">{r.city.charAt(0) + r.city.slice(1).toLowerCase()}</div>
+                  <div className="text-xs text-text-muted">
+                    {r.movements.toLocaleString("en-IN")} moved · <span className={r.real > 0 ? "text-danger font-semibold" : ""}>{r.real} not traced</span>
+                  </div>
+                  {thin && <span className="badge badge-suppressed mt-1">Low sample</span>}
+                </div>
+                <div className="w-full pt-3 border-t border-border/60 flex flex-col items-center gap-1">
+                  {daily ? (
+                    <Sparkline
+                      points={daily.map((p) => ({ label: p.date, value: p.accuracy }))}
+                      width={150}
+                      height={30}
+                      format={(v) => `${v}% traced`}
+                      ariaLabel={`${r.city}, traced rate over the last 14 days`}
+                    />
+                  ) : (
+                    <span className="text-[11px] text-text-disabled">—</span>
+                  )}
+                  <span className="text-[11px] text-text-muted">last 14 days</span>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* Ranking Table */}
       <section className="card overflow-hidden flex flex-col">

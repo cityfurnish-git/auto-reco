@@ -28,6 +28,8 @@ export interface LeaderboardData {
   empty: boolean;
   latestDate?: string;
   windows: Record<WindowKey, LeaderboardWindow> | null;
+  /** Last 14 days per city (23 Oct 2026). Absent from an older API. */
+  daily?: Record<string, { date: string; accuracy: number | null; movements: number; real: number }[]>;
 }
 
 export function useLeaderboard() {

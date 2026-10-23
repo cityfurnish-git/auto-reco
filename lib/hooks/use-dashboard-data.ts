@@ -343,6 +343,10 @@ export interface CityAgg {
   truth: Record<TruthSource, Record<"IN" | "OUT", TruthCounts>>;
   /** When Odoo's window for this day closes (ISO); null on a 15:00-rule day. */
   odooWindowEnd?: string | null;
+  /** Chase items per owning team, settled vs raised. Absent from an older API. */
+  teams?: Record<string, { total: number; closed: number }>;
+  /** Open chase items per variance name. Absent from an older API. */
+  openByName?: Record<string, number>;
   anchored: {
     gateSaw: number;
     confirmedAll: number;
@@ -438,6 +442,8 @@ export interface StatsResponse {
     completed_at: string | null;
     /** What business_date meant for this run (0049). Absent before 0049. */
     day_definition?: "calendar" | "business_15";
+    /** The run's own notes. Absent from an older API. */
+    warnings?: string[];
   } | null;
   usedFallbackRun: boolean;
   /**

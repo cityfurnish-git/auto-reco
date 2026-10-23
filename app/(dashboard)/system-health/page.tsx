@@ -7,6 +7,7 @@
 import { useMemo } from "react";
 import { ErrorState } from "@/components/error-state";
 import { useSystemHealth } from "@/lib/hooks/use-system-health";
+import { PageHeader } from "@/components/kit/layout";
 import { Icon, type IconName } from "@/components/icon";
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -108,19 +109,17 @@ export default function SystemHealthPage() {
 
   return (
     <div className="p-container-margin space-y-6">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="font-headline text-xl text-text-primary mb-1">System Health</h1>
-          <p className="text-text-muted text-sm">
-            Live pipeline activity — ingestion, reconciliation runs, uploads, and email sends.
-          </p>
-        </div>
-        <button onClick={refetch} className="btn btn-secondary self-start">
-          <Icon name="refresh" size={18} />
-          Refresh
-        </button>
-      </header>
+      <PageHeader
+        icon="health_and_safety"
+        title="System Health"
+        subtitle="Live pipeline activity — ingestion, reconciliation runs, uploads, and email sends."
+        right={
+          <button onClick={refetch} className="btn btn-secondary">
+            <Icon name="refresh" size={18} />
+            Refresh
+          </button>
+        }
+      />
 
       {error && <ErrorState what="system health" detail={error} onRetry={refetch} />}
 
@@ -138,9 +137,18 @@ export default function SystemHealthPage() {
           const ok = s.status === "OK";
           const unknown = s.status === "UNKNOWN";
           return (
-            <div key={s.source} className="card p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-headline text-sm font-bold text-text-primary">{SOURCE_LABEL[s.source] ?? s.source}</span>
+            <div key={s.source} className="soft-card p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="flex items-center gap-2.5 font-headline text-sm font-bold text-text-primary">
+                  <span
+                    className={`w-9 h-9 rounded-xl grid place-items-center ${
+                      ok ? "bg-success-soft text-success" : unknown ? "bg-surface-elevated text-text-muted" : "bg-danger-soft text-danger"
+                    }`}
+                  >
+                    <Icon name={ok ? "check_circle" : unknown ? "help" : "error"} size={18} />
+                  </span>
+                  {SOURCE_LABEL[s.source] ?? s.source}
+                </span>
                 <span className={ok ? "badge badge-done" : unknown ? "badge badge-suppressed" : "badge badge-high"}>
                   {unknown ? "No data" : s.status}
                 </span>
@@ -188,36 +196,31 @@ export default function SystemHealthPage() {
         )}
       </section>
 
-      {/* Ingestion schedule (static reference) */}
+      {/* The daily schedule. Rewritten 23 Oct 2026: it still said 16:30 and
+          16:45 and described the 15:00 business day, both retired. Times are
+          from vercel.json (11:30 / 12:30 UTC) and the pg_cron jobs. */}
       <section className="card p-6">
         <h4 className="font-headline text-lg text-text-primary mb-1">Schedule (IST)</h4>
         <p className="text-xs text-text-muted mb-4">
-          A business day runs <b className="text-text-secondary">15:00 to 15:00</b>. Business date
-          D covers D 15:00 until D+1 15:00, and is closed on the afternoon of D+1.
+          Each run judges <b className="text-text-secondary">yesterday</b>, as a calendar day
+          (midnight to midnight). Holding a day back gives late Odoo postings time to land.
         </p>
-        <ul className="space-y-3 text-sm">
-          <li className="flex items-center gap-3">
-            <Icon name="schedule" size={18} className="text-accent" />
-            <span className="text-text-secondary">Business day closes — <b className="text-text-primary">15:00</b></span>
-          </li>
-          <li className="flex items-center gap-3">
-            <Icon name="schedule" size={18} className="text-accent" />
-            <span className="text-text-secondary">Guard register + ops sheet due (ops) — <b className="text-text-primary">before 16:00</b></span>
-          </li>
-          <li className="flex items-center gap-3">
-            <Icon name="schedule" size={18} className="text-accent" />
-            <span className="text-text-secondary">Reconciliation run — OCR + 4 sources + engine — <b className="text-text-primary">16:30</b></span>
-          </li>
-          <li className="flex items-center gap-3">
-            <Icon name="schedule" size={18} className="text-accent" />
-            <span className="text-text-secondary">Digest email (the day just reconciled) — <b className="text-text-primary">16:45</b></span>
-          </li>
-        </ul>
-        <p className="text-xs text-text-muted mt-4">
-          Odoo and Delivery Tracker are windowed on the 15:00 boundary using their own
-          timestamps. The ops sheet and guard register carry a hand-typed date with no time,
-          so they are matched by date — which is why both must be in before 16:00.
-        </p>
+        <ol className="relative border-l-2 border-accent-soft ml-2 space-y-4">
+          {[
+            ["15:45", "Clean-up", "Old audit rows with nothing to do are closed"],
+            ["15:50", "Re-check", "The last six days are run again so late entries fold in"],
+            ["17:00", "Main run", "Yesterday, all four books, every city"],
+            ["18:00", "Digest email", "The day just judged, to the team"],
+          ].map(([time, title, detail]) => (
+            <li key={time} className="pl-5 relative">
+              <span className="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-accent ring-4 ring-surface-card" />
+              <p className="text-sm text-text-primary">
+                <b className="tabular-nums">{time}</b> · {title}
+              </p>
+              <p className="text-xs text-text-muted">{detail}</p>
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );

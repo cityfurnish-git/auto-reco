@@ -228,7 +228,7 @@ function RealUploadsClient({ user }: { user: SessionUser }) {
     <div className="p-container-margin">
       <div className="flex justify-between items-end mb-6">
         <div>
-          <h2 className="font-headline text-xl text-text-primary">Upload Guard Register</h2>
+          <h2 className="font-headline text-2xl md:text-3xl text-text-primary leading-tight">Upload Guard Register</h2>
           <div className="flex items-center gap-2 mt-1 text-text-muted">
             <Icon name="location_on" size={18} />
             <span className="text-sm font-medium">{selectedCity} Warehouse</span>
@@ -554,7 +554,7 @@ function DemoUploadsClient({ user }: { user: SessionUser }) {
     <div className="p-container-margin">
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h2 className="font-headline text-xl text-text-primary">Upload Guard Register</h2>
+          <h2 className="font-headline text-2xl md:text-3xl text-text-primary leading-tight">Upload Guard Register</h2>
           <div className="flex items-center gap-2 mt-1 text-text-muted">
             <Icon name="location_on" size={18} />
             <span className="text-sm font-medium">{selectedCity} Warehouse</span>

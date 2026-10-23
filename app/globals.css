@@ -245,34 +245,70 @@ body {
   }
 
   /* Cards / surfaces ------------------------------------------------------ */
+  /* Softened 23 Oct 2026 with the owner's reference board, for every page:
+     the hairline border goes in light mode (the lift does the separating) and
+     the radius grows. Dark mode keeps the border — a shadow does not read on a
+     dark ground. */
   .card {
     background: var(--surface-card);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    box-shadow: var(--shadow-card);
+    border: 1px solid transparent;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(30, 20, 80, 0.04), 0 6px 18px rgba(74, 54, 179, 0.06);
     transition: box-shadow 150ms ease;
+  }
+  [data-theme="dark"] .card {
+    border-color: var(--border-color);
+    box-shadow: none;
   }
   .card-hover:hover {
     box-shadow: var(--shadow-card-hover);
   }
+  /* The admin board's overview cards (23 Oct 2026, from the owner's reference
+     board): no hard border, a larger radius and a soft lift. Kept separate
+     from .card so the tables and modals elsewhere keep their crisp edges. */
+  .soft-card {
+    background: var(--surface-card);
+    border: 1px solid transparent;
+    border-radius: 22px;
+    box-shadow: 0 1px 2px rgba(30, 20, 80, 0.04), 0 8px 24px rgba(74, 54, 179, 0.07);
+    transition: box-shadow 150ms ease, transform 150ms ease;
+  }
+  [data-theme="dark"] .soft-card {
+    border-color: var(--border-color);
+    box-shadow: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .soft-card, .soft-card-hover:hover { transition: none; transform: none; }
+  }
+  .soft-card-hover:hover {
+    box-shadow: 0 2px 4px rgba(30, 20, 80, 0.05), 0 14px 32px rgba(74, 54, 179, 0.13);
+    transform: translateY(-1px);
+  }
 
   .kpi-tile {
     background: var(--surface-card);
-    border: 1px solid var(--border-color);
-    border-left: 3px solid var(--border-color);
-    border-radius: 12px;
-    box-shadow: var(--shadow-card);
+    /* Soft look (23 Oct 2026). The status accent is an inset bar rather than
+       a coloured left border, which a 16px radius would bend into a crescent. */
+    --tile-accent: transparent;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    box-shadow: inset 4px 0 0 var(--tile-accent), 0 1px 2px rgba(30, 20, 80, 0.04), 0 6px 18px rgba(74, 54, 179, 0.06);
     padding: 20px;
     transition: box-shadow 150ms ease;
   }
   .kpi-tile:hover {
-    box-shadow: var(--shadow-card-hover);
+    box-shadow: inset 4px 0 0 var(--tile-accent), 0 2px 4px rgba(30, 20, 80, 0.05), 0 12px 28px rgba(74, 54, 179, 0.11);
   }
-  .kpi-tile--accent { border-left-color: var(--color-accent); }
-  .kpi-tile--danger { border-left-color: var(--color-error-fg); }
-  .kpi-tile--warning { border-left-color: var(--color-warning-fg); }
-  .kpi-tile--info { border-left-color: var(--color-info-fg); }
-  .kpi-tile--success { border-left-color: var(--color-success-fg); }
+  [data-theme="dark"] .kpi-tile,
+  [data-theme="dark"] .kpi-tile:hover {
+    border-color: var(--border-color);
+    box-shadow: inset 4px 0 0 var(--tile-accent);
+  }
+  .kpi-tile--accent { --tile-accent: var(--color-accent); }
+  .kpi-tile--danger { --tile-accent: var(--color-error-fg); }
+  .kpi-tile--warning { --tile-accent: var(--color-warning-fg); }
+  .kpi-tile--info { --tile-accent: var(--color-info-fg); }
+  .kpi-tile--success { --tile-accent: var(--color-success-fg); }
 
   .kpi-label {
     font-size: 11px;
@@ -443,7 +479,7 @@ body {
     border-collapse: collapse;
   }
   .table-clean thead {
-    background: var(--surface-elevated);
+    background: var(--color-accent-soft);
   }
   .table-clean th {
     font-size: 11px;
@@ -463,11 +499,8 @@ body {
     color: var(--text-primary);
     border-bottom: 1px solid var(--border-color);
   }
-  /* Vertical column separators — same subtle border token as the row lines. */
-  .table-clean th:not(:last-child),
-  .table-clean td:not(:last-child) {
-    border-right: 1px solid var(--border-color);
-  }
+  /* Vertical column separators were here; dropped 23 Oct 2026 with the soft
+     look — the row lines and the tinted header carry the grid on their own. */
   .table-clean tbody tr {
     transition: background-color 120ms ease;
   }

@@ -191,6 +191,14 @@ interface CityAgg {
   truth: Record<TruthSource, Record<"IN" | "OUT", TruthCounts>>;
   /** When Odoo's window for this day closes (ISO), or null on a 15:00-rule day. */
   odooWindowEnd: string | null;
+  /**
+   * Chase items (REAL only) per owning team, and how many are settled — the
+   * admin board's progress bars (23 Oct 2026). Keyed by the `responsible`
+   * slug; lib/ui/variance-format.ts responsibleLabel() names it.
+   */
+  teams: Record<string, { total: number; closed: number }>;
+  /** Open chase items (REAL) per variance name — the "what kind" bar chart. */
+  openByName: Record<string, number>;
   anchored: {
     /** Movements the gate witnessed — the denominator of the three below. */
     gateSaw: number;
@@ -243,6 +251,8 @@ function emptyAgg(city: string): CityAgg {
     gateCount: { in: 0, out: 0, items: 0 },
     truth: emptyTruth(),
     odooWindowEnd: null,
+    teams: {},
+    openByName: {},
     anchored: {
       gateSaw: 0, confirmedAll: 0, gateNotOdoo: 0, gateNotSheet: 0,
       gateNotDt: 0, notSeenByGate: 0, gateReported: false,
@@ -309,6 +319,8 @@ export const GET = jsonRoute("stats/summary", async (req: NextRequest) => {
     priority: string;
     bucket: string;
     closure_reason: string | null;
+    responsible: string | null;
+    variance_name: string;
     /**
      * Never reset by a re-run — persist.ts omits it from the upsert payload —
      * so `now - first_seen_at` is a real age, not "when we last looked".
@@ -349,7 +361,7 @@ export const GET = jsonRoute("stats/summary", async (req: NextRequest) => {
     for (let from = 0; ; from += 1000) {
       const { data: page, error } = await supabase
         .from("variances")
-        .select("city, status, priority, bucket, closure_reason, first_seen_at")
+        .select("city, status, priority, bucket, closure_reason, responsible, variance_name, first_seen_at")
         // BY DATE, NOT BY RUN — the scope every other reader of this table
         // already uses (/api/variances:130, facets, the CSV export, the pending
         // list, lib/stock/db.ts). The tiles used to scope by run_id, so the
@@ -531,10 +543,15 @@ export const GET = jsonRoute("stats/summary", async (req: NextRequest) => {
       if (v.priority === "High") target.high += 1;
       else if (v.priority === "Medium") target.medium += 1;
       else if (v.priority === "Info") target.info += 1;
-      if (isReal) target.real += 1;
-      else if (v.bucket === "INFO") target.infoBucket += 1;
+      if (isReal) {
+        target.real += 1;
+        const team = (target.teams[v.responsible ?? "ops_team"] ??= { total: 0, closed: 0 });
+        team.total += 1;
+        if (v.status === "closed") team.closed += 1;
+      } else if (v.bucket === "INFO") target.infoBucket += 1;
       if (v.status === "open" && isReal) {
         target.openReal += 1;
+        target.openByName[v.variance_name] = (target.openByName[v.variance_name] ?? 0) + 1;
         // How long the queue has been waiting. A bare "Open: 23" cannot say
         // whether those 23 arrived this afternoon or have been sitting a week,
         // which is the first thing an owner asks about a backlog.
@@ -767,6 +784,11 @@ export const GET = jsonRoute("stats/summary", async (req: NextRequest) => {
       // since the 13 Sep cutover and, until 18 Sep 2026, never passed on — so
       // the scoreboard fell back to "3pm to 3pm" on calendar days.
       day_definition: (run as { day_definition?: string }).day_definition ?? "business_15",
+      // The run's own notes, for the admin board's notifications box. Raw;
+      // the board decides which deserve a person's attention.
+      warnings: Array.isArray((run as { warnings?: unknown }).warnings)
+        ? ((run as { warnings: unknown[] }).warnings.filter((w) => typeof w === "string") as string[])
+        : [],
     },
     usedFallbackRun,
     calendar,

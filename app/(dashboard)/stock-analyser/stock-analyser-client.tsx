@@ -5,6 +5,7 @@
 // and wonders why the other half did not move.
 
 import { useRef, useState } from "react";
+import { PageHeader } from "@/components/kit/layout";
 import DayRecheckPanel from "./day-recheck-panel";
 import MovementVolumesPanel from "./movement-volumes-panel";
 
@@ -34,15 +35,11 @@ export default function StockAnalyserClient({
 
   return (
     <div className="p-container-margin space-y-6">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="font-headline text-2xl text-text-primary">Stock Analyser</h1>
-          <p className="text-sm text-text-muted mt-1 max-w-2xl">
-            Two views of the warehouses — how one day changed when we checked it again, and how much
-            stock each warehouse handled over time.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        icon="fact_check"
+        title="Stock Analyser"
+        subtitle="Two views of the warehouses — how one day changed when we checked it again, and how much stock each warehouse handled over time."
+      />
 
       <div className="flex gap-1 border-b border-border overflow-x-auto" role="tablist" aria-label="Stock Analyser views">
         {TABS.map((t) => {

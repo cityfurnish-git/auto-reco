@@ -58,7 +58,7 @@ export default function DashboardShell({
       )}
 
       <main className="lg:ml-sidebar-width min-h-screen flex flex-col">
-        <header className="h-14 sticky top-0 z-30 bg-surface-card shadow-card border-b border-border flex justify-between items-center px-container-margin w-full">
+        <header className="h-16 sticky top-0 z-30 bg-surface-page/85 backdrop-blur-md flex justify-between items-center px-container-margin w-full">
           <div className="flex items-center gap-3 min-w-0">
             {/* Hamburger — drawer trigger, mobile only */}
             <button

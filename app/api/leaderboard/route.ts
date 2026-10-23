@@ -149,5 +149,19 @@ export const GET = jsonRoute("leaderboard", async () => {
     ),
   };
 
-  return NextResponse.json({ empty: false, latestDate: maxDate, windows });
+  // The last 14 days per city, one point a day — the trend lines on the
+  // leaderboard and under the admin board's city rings (23 Oct 2026). A day
+  // with no movements is null, not 100%: nothing moved, so nothing was judged.
+  const daily: Record<string, { date: string; accuracy: number | null; movements: number; real: number }[]> = {};
+  const lastDates = dates.slice(-14);
+  for (const city of CITIES) {
+    daily[city] = lastDates.map((d) => {
+      const r = rows.find((x) => x.city === city && x.business_date === d);
+      const movements = r?.movements ?? 0;
+      const real = r?.real_count ?? 0;
+      return { date: d, accuracy: accuracyOf(movements, real), movements, real };
+    });
+  }
+
+  return NextResponse.json({ empty: false, latestDate: maxDate, windows, daily });
 });

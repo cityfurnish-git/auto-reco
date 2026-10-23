@@ -7,6 +7,9 @@
 import SourceTruthCards from "./source-truth-cards";
 import SourceScoreboard from "./source-scoreboard";
 import { DashSection, DayStatus } from "./dashboard-sections";
+import { ChaseByTypeCard, CityRings, NotificationsCard, OverviewHero, TeamProgressCard, WeekStrip } from "./admin-overview";
+import { useCityTrend } from "@/lib/hooks/use-city-trend";
+import { utcToIstDate } from "@/lib/connectors/ist-window";
 import { VarianceName } from "@/components/variance-name";
 import { VarianceFlags } from "@/components/variance-flags";
 import InTransitSection from "./in-transit-section";
@@ -14,7 +17,7 @@ import CountOnlyCard from "./count-only-card";
 import { VARIANCE } from "@/lib/engine/variance-names";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionUser } from "@/lib/demo-auth";
-import type { City } from "@/lib/sample-data";
+import { CITIES, type City } from "@/lib/sample-data";
 import type { Bucket, VarianceDB, VarianceStatus } from "@/lib/db/schema";
 import CloseVarianceModal, { type ClosureReason } from "./close-variance-modal";
 import VarianceDetailModal from "./variance-detail-modal";
@@ -101,6 +104,8 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
     () => stats?.byCity.find((c) => c.city === city) ?? null,
     [stats, city]
   );
+  const cityTrend = useCityTrend();
+  const latestDay = useMemo(() => addDays(utcToIstDate(new Date().toISOString()) ?? "", -1), []);
 
   // WAS THE WAREHOUSE SHUT, read the way the engine reads it: a configured
   // closure the floor plainly worked through is a working day, so the notice
@@ -295,15 +300,35 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
           toolbar: the same `dateF` drives the KPI tiles and the facet counts as
           well as the table, so scoping it visually to the table understated
           what it actually controls. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-headline text-xl text-text-primary">{city} daily stock check</h2>
-          <p className="text-sm text-text-muted">
-            {cityAgg ? rateCaption(cityAgg) : ""}
-            {stats?.run && ` Run ${stats.run.business_date}.`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+      <OverviewHero
+        name={user.name}
+        agg={cityAgg}
+        businessDate={stats?.run?.business_date}
+        loading={statsLoading}
+        error={statsError}
+        scope={{ city }}
+        onOpenChase={() =>
+          document.getElementById("dash-section-4")?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-2">
+        <p className="text-sm text-text-muted">
+          {cityAgg ? rateCaption(cityAgg) : ""}
+          {stats?.run && ` Run ${stats.run.business_date}.`}
+        </p>
+        <div className="flex items-center gap-3 shrink-0">
+          {stats?.run && (
+            <div className="hidden lg:block">
+              <WeekStrip
+                anchor={dateF || stats.run.business_date}
+                selected={stats.run.business_date}
+                latest={latestDay}
+                calendar={stats.calendar}
+                onPick={(d) => resetPage(setDateF)(d)}
+              />
+            </div>
+          )}
           <label htmlFor="business-date" className="text-xs text-text-muted whitespace-nowrap hidden sm:inline">
             Business date
           </label>
@@ -329,6 +354,42 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
           )}
         </div>
       </div>
+
+      {/* The same overview boxes as the admin board, scoped to this city. The
+          run's notes cover every city, so only this city's lines and the
+          city-less ones (a connector that failed for everyone) are kept. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {cityAgg && stats?.run ? (
+          <CityRings
+            cities={[cityAgg]}
+            businessDate={stats.run.business_date}
+            calendar={stats.calendar}
+            trend={cityTrend}
+            onOpen={() =>
+              document.getElementById("dash-section-4")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          />
+        ) : (
+          <div className="soft-card p-5 text-sm text-text-muted">{statsLoading ? "…" : "—"}</div>
+        )}
+        <ChaseByTypeCard
+          byName={statsLoading || statsError ? undefined : cityAgg?.openByName ?? {}}
+          onPick={(name) => {
+            resetPage(setVarianceName)(name);
+            document.getElementById("dash-section-4")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
+        <TeamProgressCard teams={statsLoading || statsError ? undefined : cityAgg?.teams ?? {}} />
+      </div>
+      <NotificationsCard
+        warnings={
+          statsLoading || statsError
+            ? undefined
+            : (stats?.run?.warnings ?? []).filter(
+                (w) => w.toUpperCase().includes(city) || !CITIES.some((c) => w.toUpperCase().includes(c))
+              )
+        }
+      />
 
       {/* Not a parenthetical: a fallback means every figure below describes a
           different day than the one asked for. */}

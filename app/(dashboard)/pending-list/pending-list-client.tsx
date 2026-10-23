@@ -17,6 +17,7 @@
 import { VarianceName } from "@/components/variance-name";
 import { VarianceFlags } from "@/components/variance-flags";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PageHeader } from "@/components/kit/layout";
 import { Icon } from "@/components/icon";
 import { SourceBadge } from "@/components/source-badge";
 import { errText, useToast } from "@/components/toast";
@@ -181,19 +182,23 @@ export default function PendingListClient({ user }: { user: SessionUser }) {
 
   return (
     <div className="p-container-margin space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-headline text-xl text-text-primary mb-1">Pending List</h1>
-          <p className="text-sm text-text-muted">
+      <PageHeader
+        icon="pending_actions"
+        title="Pending List"
+        subtitle={
+          <>
             Variances parked for follow-up rather than finished.{" "}
             {isAdmin ? "All cities." : `${user.city} only.`} Resolve one with a real reason to
             take it off the list.
-          </p>
-        </div>
-        <span className="badge badge-medium text-sm">
-          {loading ? "…" : `${total} pending`}
-        </span>
-      </div>
+          </>
+        }
+        right={
+          <span className="soft-card px-4 py-2 text-sm">
+            <b className="font-headline text-xl text-text-primary mr-1.5">{loading ? "…" : total}</b>
+            <span className="text-text-muted">pending</span>
+          </span>
+        }
+      />
 
       {/* City tabs — admin only; a manager has exactly one city. */}
       {isAdmin && (

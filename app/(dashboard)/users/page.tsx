@@ -6,6 +6,7 @@
 
 import { useMemo, useState } from "react";
 import { CITIES, type City } from "@/lib/sample-data";
+import { PageHeader } from "@/components/kit/layout";
 import { Icon } from "@/components/icon";
 import { Modal } from "@/components/modal";
 import { errText, useToast } from "@/components/toast";
@@ -139,13 +140,15 @@ export default function UsersPage() {
 
   return (
     <div className="p-container-margin">
+      <div className="mb-6">
+        <PageHeader icon="group" title="User Management" subtitle="Who can open the portal, their role and their warehouse." />
+      </div>
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-end mb-6">
         <div>
-          <p className="text-text-muted text-sm mb-2">Operational Personnel Overview</p>
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <div className="card px-4 py-3 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-control bg-accent flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center shrink-0">
                 <Icon name="group" size={22} className="text-on-accent" />
               </div>
               <div>
@@ -154,7 +157,7 @@ export default function UsersPage() {
               </div>
             </div>
             <div className="card px-4 py-3 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-control bg-success-soft flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-success-soft flex items-center justify-center shrink-0">
                 <Icon name="verified_user" size={22} className="text-success" />
               </div>
               <div>

@@ -11,6 +11,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState } from "@/components/error-state";
+import { PageHeader } from "@/components/kit/layout";
 import { Icon } from "@/components/icon";
 import { Modal } from "@/components/modal";
 import { CITIES } from "@/lib/sample-data";
@@ -53,19 +54,18 @@ export default function GateClient({ user }: { user: SessionUser }) {
   }, [tab]);
   return (
     <section className="p-container-margin space-y-6">
-      <header>
-        <h1 className="font-headline text-xl text-text-primary mb-1">Gate</h1>
-        <p className="text-text-muted text-sm">
-          What the gate recorded, who is on duty, and anything waiting on a decision.
-        </p>
-      </header>
+      <PageHeader
+        icon="shield"
+        title="Gate"
+        subtitle="What the gate recorded, who is on duty, and anything waiting on a decision."
+      />
 
-      <div className="bg-surface-elevated rounded-control p-1 flex flex-wrap gap-1">
+      <div className="bg-surface-card shadow-sm rounded-xl p-1 flex flex-wrap gap-1 w-fit">
         {TABS.map((x) => (
           <button key={x.id} onClick={() => setTab(x.id)}
             className={tab === x.id
-              ? "px-4 py-1.5 text-sm font-medium rounded-control bg-surface-card shadow-card flex items-center gap-2"
-              : "px-4 py-1.5 text-sm text-text-secondary rounded-control hover:bg-surface-card transition-colors duration-150 flex items-center gap-2"}>
+              ? "px-4 py-1.5 text-sm font-semibold rounded-lg bg-accent text-on-accent flex items-center gap-2"
+              : "px-4 py-1.5 text-sm text-text-secondary rounded-lg hover:bg-accent-soft transition-colors duration-150 flex items-center gap-2"}>
             <Icon name={x.icon as never} size={16} />{x.label}
             {x.id === "reviews" && pending !== null && pending > 0 && (
               <span className="badge badge-high ml-1">{pending}</span>

@@ -11,6 +11,8 @@ import { sourceLabel } from "@/lib/ui/source-names";
 import { VarianceName } from "@/components/variance-name";
 import { VarianceFlags } from "@/components/variance-flags";
 import InTransitSection from "./in-transit-section";
+import { ChaseByTypeCard, CityRings, NotificationsCard, OverviewHero, TeamProgressCard, WeekStrip } from "./admin-overview";
+import { useCityTrend } from "@/lib/hooks/use-city-trend";
 import SourceScoreboard from "./source-scoreboard";
 import CountOnlyCard from "./count-only-card";
 import { VARIANCE } from "@/lib/engine/variance-names";
@@ -32,6 +34,7 @@ import VarianceDetailModal from "./variance-detail-modal";
 import VarianceListModal, { type ListModalRequest } from "./variance-list-modal";
 import { floorRowsOf, isCityClosed } from "@/lib/engine/schedule";
 import { addDays } from "@/lib/engine/dates";
+import { utcToIstDate } from "@/lib/connectors/ist-window";
 // closedCaption / queueCaption went with the KPI tiles — the one-line strip has
 // no room for a sentence under each figure. Still used by the manager dashboard.
 import { cityRateLine, rateCaption, statFigure } from "@/lib/ui/stat-captions";
@@ -229,6 +232,12 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
       : stats.byCity.find((c) => c.city === cityTab) ?? emptyCityAgg(cityTab);
   }, [stats, cityTab]);
 
+  // The newest day a run can have judged: yesterday, IST. Bounds the week
+  // strip; before the 17:00 run it may not exist yet, and the stale-run banner
+  // already says so when it is picked.
+  const cityTrend = useCityTrend();
+  const latestDay = useMemo(() => addDays(utcToIstDate(new Date().toISOString()) ?? "", -1), []);
+
   function resetPage<T>(setter: (v: T) => void) {
     return (v: T) => {
       setter(v);
@@ -399,28 +408,32 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
         />
       )}
 
-      {/* City tabs + the business-date picker.
-          The picker lives here, not in the table toolbar below, because it does
-          not only filter the table: the same `dateF` drives the KPI tiles, the
-          count-only movements card, the city breakdown and the facet counts.
-          Sitting inside the table's header understated its reach. */}
-      <div className="border-b border-border flex items-end justify-between gap-4">
-        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-          {(["ALL", ...CITIES] as CityTab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => resetPage(setCityTab)(tab)}
-              className={
-                cityTab === tab
-                  ? "px-4 py-2.5 text-sm font-semibold text-accent border-b-2 border-accent whitespace-nowrap transition-colors duration-150"
-                  : "px-4 py-2.5 text-sm text-text-secondary hover:text-accent whitespace-nowrap transition-colors duration-150"
-              }
-            >
-              {tab === "ALL" ? "ALL CITIES" : tab}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 pb-2 shrink-0">
+      <OverviewHero
+        name={user.name}
+        agg={stats?.overall ?? null}
+        businessDate={stats?.run?.business_date}
+        loading={statsLoading}
+        error={statsError}
+        onOpenChase={() =>
+          document.getElementById("dash-section-4")?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }
+      />
+
+      {/* The week, on its own row: beside the city tabs it squeezed them until
+          Bangalore was cut off at a normal laptop width. */}
+      <div className="flex flex-wrap items-center justify-end gap-3 -mb-3">
+        {stats?.run && (
+          <div className="hidden md:block soft-card px-3 py-2">
+            <WeekStrip
+              anchor={dateF || stats.run.business_date}
+              selected={stats.run.business_date}
+              latest={latestDay}
+              calendar={stats.calendar}
+              onPick={(d) => resetPage(setDateF)(d)}
+            />
+          </div>
+        )}
+        <div className="flex items-center gap-2 shrink-0">
           <label htmlFor="business-date" className="text-xs text-text-muted whitespace-nowrap hidden sm:inline">
             Business date
           </label>
@@ -445,6 +458,30 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
             </button>
           )}
         </div>
+
+      </div>
+
+      {/* City tabs. The date picker sits in the row above, not in the table
+          toolbar below, because it does
+          not only filter the table: the same `dateF` drives the KPI tiles, the
+          count-only movements card, the city breakdown and the facet counts.
+          Sitting inside the table's header understated its reach. */}
+      <div className="border-b border-border flex items-end justify-between gap-4">
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+          {(["ALL", ...CITIES] as CityTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => resetPage(setCityTab)(tab)}
+              className={
+                cityTab === tab
+                  ? "px-4 py-2.5 text-sm font-semibold text-accent border-b-2 border-accent whitespace-nowrap transition-colors duration-150"
+                  : "px-4 py-2.5 text-sm text-text-secondary hover:text-accent whitespace-nowrap transition-colors duration-150"
+              }
+            >
+              {tab === "ALL" ? "ALL CITIES" : tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* The figures could not be read. Every number below shows an em dash
@@ -457,6 +494,18 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
       {/* FOUR NUMBERED SECTIONS, in the order anybody reads a day (18 Sep 2026
           — the page had grown into an unsectioned pile). See
           dashboard-sections.tsx. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <ChaseByTypeCard
+          byName={statsLoading || statsError ? undefined : agg?.openByName ?? {}}
+          onPick={(name) => {
+            resetPage(setVarianceName)(name);
+            document.getElementById("dash-section-4")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
+        <NotificationsCard warnings={statsLoading || statsError ? undefined : stats?.run?.warnings ?? []} />
+        <TeamProgressCard teams={statsLoading || statsError ? undefined : agg?.teams ?? {}} />
+      </div>
+
       <DashSection n={1} title="Day status" subtitle="Can this day be judged yet, and what is open">
         <DayStatus agg={agg} loading={statsLoading} error={statsError} onOpenList={setListRequest} />
         {/* Items in transit — not losses: out of the warehouse, Odoo Out not
@@ -499,118 +548,20 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
         />
       </DashSection>
 
-      {/* City-wise breakdown */}
+      {/* City-wise breakdown — one ring per city (23 Oct 2026, the owner's
+          reference board). Shut days, worked-through closures and the match
+          rate are read exactly as before; the longer notes (waiting on Odoo,
+          register after a day off) live on the city's own view, one click on. */}
       {cityTab === "ALL" && stats && stats.byCity.length > 0 && (
         <div className="space-y-4">
           <h3 className="font-headline text-lg text-text-primary">City-wise Breakdown</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {stats.byCity.map((c) => {
-              // Weekly holiday: the warehouse was closed — neutral border + OFF
-              // badge so empty numbers read as "expected", not as a data gap.
-              // ONE badge per week, on the off date only (the owner's rule).
-              // CALENDAR-AWARE (migration 0019): the delivery app's own
-              // weekly-off rules plus its 27 one-off holidays, mirrored into
-              // Supabase each run. Null calendar = pre-0019 database, and
-              // isCityClosed then falls back to the hardcoded Thursday map, so
-              // this line is correct on every vintage of database.
-              const bd = stats.run?.business_date ?? "";
-              // READ THE DAY THE WAY THE ENGINE DOES. A configured closure the
-              // floor plainly worked through is a working day, so no OFF badge:
-              // four cities ran a full Thursday on 1 Oct 2026 that the calendar
-              // called a day off. See isCityClosed.
-              const off =
-                bd !== "" &&
-                isCityClosed(c.city as City, bd, stats.calendar, floorRowsOf(c.sources));
-              const isHoliday = off && !!stats.calendar?.holidays?.[c.city]?.includes(bd);
-              // The day BEFORE a closure: the city works this whole board, but
-              // its guard register is handed over AFTER the day off — the book
-              // from a Thursday-off warehouse arrives Friday. A schedule, not a
-              // gap, so it gets its own chip rather than a closure badge.
-              const registerDue = bd !== "" && !off && isCityClosed(c.city as City, addDays(bd, 1), stats.calendar);
-              return (
-              <div
-                key={c.city}
-                className={`card card-hover p-4 flex flex-col gap-3 border-l-[3px] ${
-                  off ? "border-l-border" : c.real > 0 ? "border-l-danger" : "border-l-success"
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <h4 className="font-headline text-base text-text-primary flex items-center gap-2">
-                    {c.city}
-                    {off && (
-                      <span
-                        className="badge badge-suppressed uppercase"
-                        title={
-                          isHoliday
-                            ? "Holiday — the delivery app's calendar marks this warehouse shut on this date, so no floor entries are expected"
-                            : "Weekly off — the warehouse was shut, so no gate register, ops sheet or delivery-app entries are expected for this day"
-                        }
-                      >
-                        {isHoliday ? "Holiday" : "Week off"}
-                      </span>
-                    )}
-                    {!off && registerDue && (
-                      <span
-                        className="badge badge-suppressed uppercase"
-                        title="Tomorrow is this warehouse's weekly off, so today's guard register is handed over the day AFTER the holiday — not tomorrow. The numbers here fill in then; an absent register today is on schedule, not overdue."
-                      >
-                        Register after day off
-                      </span>
-                    )}
-                  </h4>
-                  <span className={`font-bold text-lg ${off ? "text-text-disabled" : c.real > 0 ? "text-danger" : "text-success"}`}>
-                    {c.real}
-                  </span>
-                </div>
-                <div className="text-xs text-text-muted">
-                  {off ? (
-                    <span>
-                      {isHoliday ? "Holiday" : "Weekly off"} — the warehouse was shut, so nothing
-                      is expected
-                    </span>
-                  ) : (
-                    <>
-                      <span className="text-danger font-semibold">{cityRateLine(c)}</span>{" · "}
-                      {c.openReal} open
-                    </>
-                  )}
-                </div>
-                {/* WHO SAW THESE MOVEMENTS. Without it a reader assumes every
-                    movement was witnessed on the floor. Measured 2026-07-29:
-                    Mumbai 123 of 172 were seen by Odoo alone, while Pune's 33 of
-                    33 were the exact opposite — the floor logged them and Odoo
-                    has not posted them, which is a backlog, not missing stock. */}
-                {!off && c.ledgered > 0 && c.floorNotInOdoo > 0 && (
-                  <div className="text-xs text-status-warning">
-                    Waiting on Odoo — {c.floorNotInOdoo} of {c.ledgered} the floor
-                    recorded are not posted yet
-                  </div>
-                )}
-                {!off && c.ledgered > 0 && c.odooOnly > 0 && (
-                  <div className="text-xs text-text-muted">
-                    Only Odoo saw {c.odooOnly} of {c.ledgered} — no floor record
-                  </div>
-                )}
-                {!off && registerDue && (
-                  <div className="text-xs text-text-muted">
-                    Tomorrow is this warehouse&apos;s weekly off, so today&apos;s guard
-                    register is handed over the day after the holiday — these numbers
-                    fill in then. Absent today is on schedule, not overdue.
-                  </div>
-                )}
-                <div className="text-xs text-text-disabled">
-                  PP boxes {c.ppBox} · Consumables {c.consumable} — counted, not chased
-                </div>
-                <button
-                  onClick={() => resetPage(setCityTab)(c.city as City)}
-                  className="btn btn-compact btn-secondary w-full"
-                >
-                  VIEW DETAIL
-                </button>
-              </div>
-              );
-            })}
-          </div>
+          <CityRings
+            cities={stats.byCity}
+            businessDate={stats.run?.business_date ?? ""}
+            calendar={stats.calendar}
+            trend={cityTrend}
+            onOpen={(c) => resetPage(setCityTab)(c)}
+          />
         </div>
       )}
 

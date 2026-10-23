@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState } from "@/components/error-state";
+import { PageHeader } from "@/components/kit/layout";
 import { Icon } from "@/components/icon";
 import FollowUpSend from "./follow-up-send";
 import { useUsers } from "@/lib/hooks/use-users";
@@ -310,12 +311,15 @@ export default function EmailPreview() {
 
   return (
     <div className="p-container-margin space-y-6">
-      <div>
-        <h1 className="font-headline text-xl text-text-primary">Daily Email Digest</h1>
-        <p className="text-sm text-text-muted mt-1">
-          Compose and send the reconciliation digest{data?.date ? <> for <b className="text-text-secondary">{data.date}</b></> : ""}, or schedule it to go out later once variances are resolved.
-        </p>
-      </div>
+      <PageHeader
+        icon="mail"
+        title="Daily Email Digest"
+        subtitle={
+          <>
+            Compose and send the reconciliation digest{data?.date ? <> for <b className="text-text-secondary">{data.date}</b></> : ""}, or schedule it to go out later once variances are resolved.
+          </>
+        }
+      />
 
       {error && <ErrorState what="the digest preview" detail={error} onRetry={() => setPreviewReload((n) => n + 1)} />}
 

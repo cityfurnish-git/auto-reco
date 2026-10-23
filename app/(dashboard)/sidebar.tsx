@@ -200,7 +200,7 @@ export default function Sidebar({
         </button>
       </div>
 
-      <nav className="flex-1 px-3 space-y-0.5">
+      <nav className="flex-1 px-3 space-y-1">
         {items.map((item) => {
           const active = pathname.startsWith(item.href);
           return (
@@ -213,8 +213,8 @@ export default function Sidebar({
               aria-current={active ? "page" : undefined}
               className={
                 active
-                  ? "flex items-center gap-3 px-3 py-2.5 rounded-control bg-white/10 text-white border-l-[3px] border-primary-fixed-dim font-semibold transition-[background-color,border-color] duration-150"
-                  : "flex items-center gap-3 px-3 py-2.5 rounded-control border-l-[3px] border-transparent text-on-primary-container opacity-70 hover:opacity-100 hover:bg-white/5 transition-[background-color,border-color,opacity] duration-150"
+                  ? "flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white text-primary font-semibold shadow-sm transition-[background-color,color] duration-150"
+                  : "flex items-center gap-3 px-3 py-2.5 rounded-xl text-on-primary-container opacity-75 hover:opacity-100 hover:bg-white/10 transition-[background-color,opacity] duration-150"
               }
             >
               <Icon name={item.icon} size={18} />

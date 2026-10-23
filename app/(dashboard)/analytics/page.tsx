@@ -9,18 +9,15 @@ import { statFigure } from "@/lib/ui/stat-captions";
 import { ErrorState } from "@/components/error-state";
 import { useAnalytics, type DayPoint } from "@/lib/hooks/use-analytics";
 import { Icon } from "@/components/icon";
+import { Ring, statusTone } from "@/components/kit/charts";
+import { PageHeader, Pills } from "@/components/kit/layout";
 
 type Win = "7" | "30";
 
 const pct = (v: number | null) => (v === null ? "—" : `${v}%`);
 
-// Accuracy → colour band (reads theme-safe CSS vars).
-function bandColor(acc: number | null): string {
-  if (acc === null) return "var(--text-disabled)";
-  if (acc >= 95) return "var(--color-success-fg)";
-  if (acc >= 90) return "var(--color-warning-fg)";
-  return "var(--color-error-fg)";
-}
+// Accuracy → colour band. Shared with the rings on every page (kit/charts).
+const bandColor = (acc: number | null) => statusTone(acc, "var(--text-disabled)");
 // The axis is floored at AXIS_MIN so the useful band spans the full bar height
 // (98% vs 82% stays legible). That is a legitimate choice for this data, but it
 // exaggerates differences, so the gridlines below draw the floor explicitly
@@ -81,39 +78,29 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-container-margin space-y-6">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="font-headline text-xl text-text-primary mb-1">Accuracy over time</h1>
-          <p className="text-text-muted text-sm">
-            How much of what we move gets traced end to end — day by day, and city by city. Days a warehouse was shut are left out.
-          </p>
-        </div>
-        <div className="bg-surface-elevated rounded-control p-1 flex">
-          {(["7", "30"] as Win[]).map((w) => (
-            <button
-              key={w}
-              onClick={() => setWin(w)}
-              className={
-                win === w
-                  ? "px-4 py-1.5 text-sm font-medium rounded-control bg-surface-card shadow-card"
-                  : "px-4 py-1.5 text-sm text-text-secondary rounded-control hover:bg-surface-card transition-colors duration-150"
-              }
-            >
-              {w} Days
-            </button>
-          ))}
-        </div>
-      </header>
+      <PageHeader
+        icon="monitoring"
+        title="Accuracy over time"
+        subtitle="How much of what we move gets traced end to end — day by day, and city by city. Days a warehouse was shut are left out."
+        right={
+          <Pills
+            options={[{ key: "7" as Win, label: "7 Days" }, { key: "30" as Win, label: "30 Days" }]}
+            value={win}
+            onChange={setWin}
+          />
+        }
+      />
 
       {error && <ErrorState what="the analytics" detail={error} onRetry={refetch} />}
 
       {/* KPI Row */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-gutter">
-        <div className="kpi-tile kpi-tile--accent card-hover">
-          <span className="kpi-label">Traced end to end</span>
-          <h3 className="kpi-value mt-3">{pct(avgAccuracy)}</h3>
-          <p className="text-xs text-text-muted">Last {nDays} days · {totalMovements.toLocaleString()} units moved</p>
+        <div className="kpi-tile kpi-tile--accent card-hover flex items-center gap-4">
+          <Ring pct={avgAccuracy} label={pct(avgAccuracy)} size={68} stroke={6} title="Traced end to end" />
+          <div>
+            <span className="kpi-label">Traced end to end</span>
+            <p className="text-xs text-text-muted mt-1">Last {nDays} days · {totalMovements.toLocaleString()} units moved</p>
+          </div>
         </div>
         <div className="kpi-tile kpi-tile--success card-hover">
           <span className="kpi-label">Best city</span>
