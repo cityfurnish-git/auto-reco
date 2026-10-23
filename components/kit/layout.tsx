@@ -41,12 +41,14 @@ export function BoxCard({ title, icon, right, children, className = "" }: {
 }) {
   return (
     <div className={`soft-card p-5 flex flex-col gap-4 min-w-0 ${className}`}>
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-headline text-lg text-text-primary flex items-center gap-2">
-          {icon && <Icon name={icon} size={18} className="text-accent" />}
-          {title}
+      {/* One line, always: a title that wrapped pushed its side label onto
+          two lines beside it (owner, 23 Oct 2026). */}
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        <h3 className="font-headline text-lg text-text-primary flex items-center gap-2 min-w-0 whitespace-nowrap">
+          {icon && <Icon name={icon} size={18} className="text-accent shrink-0" />}
+          <span className="truncate">{title}</span>
         </h3>
-        {right && <span className="text-xs text-text-muted">{right}</span>}
+        {right && <span className="text-xs text-text-muted whitespace-nowrap shrink-0">{right}</span>}
       </div>
       {children}
     </div>

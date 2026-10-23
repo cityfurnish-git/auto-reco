@@ -417,13 +417,8 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
         onOpenChase={() =>
           document.getElementById("dash-section-4")?.scrollIntoView({ behavior: "smooth", block: "start" })
         }
-      />
-
-      {/* The week, on its own row: beside the city tabs it squeezed them until
-          Bangalore was cut off at a normal laptop width. */}
-      <div className="flex flex-wrap items-center justify-end gap-3 -mb-3">
-        {stats?.run && (
-          <div className="hidden md:block soft-card px-3 py-2">
+        dates={
+          stats?.run ? (
             <WeekStrip
               anchor={dateF || stats.run.business_date}
               selected={stats.run.business_date}
@@ -431,38 +426,12 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
               calendar={stats.calendar}
               onPick={(d) => resetPage(setDateF)(d)}
             />
-          </div>
-        )}
-        <div className="flex items-center gap-2 shrink-0">
-          <label htmlFor="business-date" className="text-xs text-text-muted whitespace-nowrap hidden sm:inline">
-            Business date
-          </label>
-          <input
-            id="business-date"
-            type="date"
-            value={dateF}
-            /* resetPage, not a bare setDateF — it also clears the row selection,
-               so a selection made under one date can't reach a bulk action on
-               another. */
-            onChange={(e) => resetPage(setDateF)(e.target.value)}
-            className="input-clean cursor-pointer"
-            title="View a past reconciliation date (blank = the latest run)"
-          />
-          {dateF && (
-            <button
-              onClick={() => resetPage(setDateF)("")}
-              className="btn btn-compact btn-ghost"
-              title="Back to the latest run"
-            >
-              Latest
-            </button>
-          )}
-        </div>
+          ) : null
+        }
+      />
 
-      </div>
-
-      {/* City tabs. The date picker sits in the row above, not in the table
-          toolbar below, because it does
+      {/* City tabs. The date — week strip and calendar — sits under the
+          greeting, not in the table toolbar below, because it does
           not only filter the table: the same `dateF` drives the KPI tiles, the
           count-only movements card, the city breakdown and the facet counts.
           Sitting inside the table's header understated its reach. */}

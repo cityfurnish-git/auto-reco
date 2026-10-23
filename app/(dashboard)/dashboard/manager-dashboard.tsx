@@ -310,6 +310,17 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
         onOpenChase={() =>
           document.getElementById("dash-section-4")?.scrollIntoView({ behavior: "smooth", block: "start" })
         }
+        dates={
+          stats?.run ? (
+            <WeekStrip
+              anchor={dateF || stats.run.business_date}
+              selected={stats.run.business_date}
+              latest={latestDay}
+              calendar={stats.calendar}
+              onPick={(d) => resetPage(setDateF)(d)}
+            />
+          ) : null
+        }
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-2">
@@ -317,42 +328,6 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
           {cityAgg ? rateCaption(cityAgg) : ""}
           {stats?.run && ` Run ${stats.run.business_date}.`}
         </p>
-        <div className="flex items-center gap-3 shrink-0">
-          {stats?.run && (
-            <div className="hidden lg:block">
-              <WeekStrip
-                anchor={dateF || stats.run.business_date}
-                selected={stats.run.business_date}
-                latest={latestDay}
-                calendar={stats.calendar}
-                onPick={(d) => resetPage(setDateF)(d)}
-              />
-            </div>
-          )}
-          <label htmlFor="business-date" className="text-xs text-text-muted whitespace-nowrap hidden sm:inline">
-            Business date
-          </label>
-          <input
-            id="business-date"
-            type="date"
-            value={dateF}
-            /* resetPage, not a bare setDateF — it also clears the row selection,
-               so a selection made under one date can't reach a bulk action on
-               another. */
-            onChange={(e) => resetPage(setDateF)(e.target.value)}
-            className="input-clean cursor-pointer"
-            title="View a past reconciliation date (blank = the latest run)"
-          />
-          {dateF && (
-            <button
-              onClick={() => resetPage(setDateF)("")}
-              className="btn btn-compact btn-ghost"
-              title="Back to the latest run"
-            >
-              Latest
-            </button>
-          )}
-        </div>
       </div>
 
       {/* The same overview boxes as the admin board, scoped to this city. The

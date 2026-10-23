@@ -152,8 +152,11 @@ export function BarList({ items, max, empty = "Nothing to show." }: {
         const pct = Math.max(2, (it.value / top) * 100);
         const row = (
           <>
-            <span className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="text-text-primary min-w-0 truncate">{it.label}</span>
+            <span className="flex items-start justify-between gap-3 text-sm">
+              {/* Two lines before cutting: plain-language names run long, and
+                  "No Guard scan — the other three agr…" hid the half that
+                  says what it means. */}
+              <span className="text-text-primary min-w-0 line-clamp-2 leading-snug">{it.label}</span>
               <span className="text-xs text-text-muted tabular-nums shrink-0">{it.display ?? it.value.toLocaleString("en-IN")}</span>
             </span>
             <span className="block h-2 mt-1.5 rounded-full bg-surface-elevated overflow-hidden">

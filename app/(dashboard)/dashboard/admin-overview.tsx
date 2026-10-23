@@ -11,6 +11,7 @@
 // prints an em dash, never a confident zero.
 
 import Link from "next/link";
+import { useRef, type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icon";
 import { BarList, Ring, Sparkline, type SparkPoint } from "@/components/kit/charts";
 import { BoxCard } from "@/components/kit/layout";
@@ -20,12 +21,16 @@ import { floorRowsOf, isCityClosed } from "@/lib/engine/schedule";
 import { accuracyOf } from "@/lib/stats/accuracy";
 import { MIN_MOVEMENTS, statFigure } from "@/lib/ui/stat-captions";
 import { responsibleLabel } from "@/lib/ui/variance-format";
+import { shortNotice } from "@/lib/ui/short-notice";
 import type { CityAgg, StatsResponse } from "@/lib/hooks/use-dashboard-data";
 
 /* ── greeting + the three ways in ─────────────────────────────────────────── */
 
-export function OverviewHero({ name, agg, businessDate, loading, error, onOpenChase, scope = "admin" }: {
+export function OverviewHero({ name, agg, businessDate, loading, error, onOpenChase, scope = "admin", dates }: {
   name: string;
+  /** The week strip, under the greeting so the column's foot lines up with
+   *  the cards' foot (owner, 23 Oct 2026). */
+  dates?: ReactNode;
   /** Admin sees all five cities and the stock check; a manager sees their own
    *  warehouse, and the pending list in its place (stock check is admin-only). */
   scope?: "admin" | { city: string };
@@ -39,16 +44,19 @@ export function OverviewHero({ name, agg, businessDate, loading, error, onOpenCh
   const fig = (v: number | undefined) => statFigure(loading, error, v);
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_2fr] gap-5 items-stretch">
-      <div className="flex flex-col justify-center py-2">
-        <h1 className="font-headline text-3xl md:text-4xl text-text-primary leading-tight">
-          Hi, {first}!
-          <br />
-          <span className="text-text-secondary">Here is {businessDate ? dayName(businessDate) : "the latest day"}.</span>
-        </h1>
-        <p className="text-sm text-text-muted mt-3 max-w-md">
-          {fig(agg?.movements)} units moved · <b className="text-text-primary">{fig(agg?.openReal)}</b> still to
-          chase {scope === "admin" ? "across all five cities" : `in ${titleCase(scope.city)}`}.
-        </p>
+      <div className="flex flex-col justify-between gap-5 min-w-0">
+        <div>
+          <h1 className="font-headline text-3xl md:text-4xl text-text-primary leading-tight">
+            Hi, {first}!
+            <br />
+            <span className="text-text-secondary">Here is {businessDate ? dayName(businessDate) : "the latest day"}.</span>
+          </h1>
+          <p className="text-sm text-text-muted mt-3 max-w-md">
+            {fig(agg?.movements)} units moved · <b className="text-text-primary">{fig(agg?.openReal)}</b> still to
+            chase {scope === "admin" ? "across all five cities" : `in ${titleCase(scope.city)}`}.
+          </p>
+        </div>
+        {dates}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <WayIn
@@ -129,8 +137,11 @@ export function WeekStrip({ anchor, selected, latest, calendar, onPick }: {
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(anchor, i - 6));
   const canForward = !!latest && anchor < latest;
+  // Any other date: the browser's own picker, opened from a calendar button
+  // at the strip's end, so the strip needs no separate date box beside it.
+  const picker = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="soft-card px-2 py-1.5 inline-flex items-center gap-0.5 w-fit max-w-full">
       <StripArrow dir="left" onClick={() => onPick(addDays(anchor, -7))} />
       {days.map((d) => {
         const shut = CITIES.every((c) => isCityClosed(c as City, d, calendar));
@@ -143,7 +154,7 @@ export function WeekStrip({ anchor, selected, latest, calendar, onPick }: {
             disabled={future}
             onClick={() => onPick(d === latest ? "" : d)}
             title={shut ? `${d} — every warehouse shut` : d}
-            className={`w-11 py-1.5 rounded-xl flex flex-col items-center text-[11px] leading-tight transition-colors ${
+            className={`w-10 py-1.5 rounded-xl flex flex-col items-center text-[11px] leading-tight transition-colors ${
               active
                 ? "bg-accent text-on-accent font-semibold"
                 : future
@@ -158,6 +169,28 @@ export function WeekStrip({ anchor, selected, latest, calendar, onPick }: {
         );
       })}
       <StripArrow dir="right" disabled={!canForward} onClick={() => onPick(addDays(anchor, 7) >= (latest ?? "") ? "" : addDays(anchor, 7))} />
+      <span className="w-px h-8 bg-border mx-1" aria-hidden />
+      <span className="relative">
+        <button
+          type="button"
+          onClick={() => picker.current?.showPicker?.()}
+          aria-label="Pick any date"
+          title="Pick any date"
+          className="w-9 h-9 rounded-full grid place-items-center text-accent hover:bg-accent-soft"
+        >
+          <Icon name="calendar_today" size={17} />
+        </button>
+        <input
+          ref={picker}
+          type="date"
+          tabIndex={-1}
+          aria-hidden
+          max={latest}
+          value={selected}
+          onChange={(e) => e.target.value && onPick(e.target.value === latest ? "" : e.target.value)}
+          className="absolute inset-0 opacity-0 pointer-events-none"
+        />
+      </span>
     </div>
   );
 }
@@ -258,19 +291,27 @@ const NEEDS_A_PERSON = /header|rows skipped|(lookup|lookahead|fetch|query|connec
 export function NotificationsCard({ warnings }: { warnings: string[] | undefined }) {
   const items = [...new Set((warnings ?? []).filter((w) => NEEDS_A_PERSON.test(w)))].slice(0, 6);
   return (
-    <BoxCard title="Notifications" icon="notifications">
+    <BoxCard title="Notifications" icon="notifications" right={items.length ? `${items.length}` : undefined}>
       {warnings === undefined ? (
         <p className="text-sm text-text-muted">—</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-text-muted">Nothing needs attention from this run.</p>
       ) : (
-        <ul className="space-y-2.5">
-          {items.map((w) => (
-            <li key={w} className="flex gap-2.5 text-sm text-text-secondary">
-              <span className="mt-1.5 h-2 w-2 rounded-full bg-status-warning shrink-0" />
-              <span>{w}</span>
-            </li>
-          ))}
+        <ul className="space-y-3">
+          {items.map((w) => {
+            const s = shortNotice(w);
+            return (
+              <li key={w} className="flex gap-2.5 text-sm" title={w}>
+                <span className="mt-1.5 h-2 w-2 rounded-full bg-status-warning shrink-0" />
+                <span className="min-w-0">
+                  {s.who && <b className="text-text-primary">{s.who}</b>}
+                  {s.who && <span className="text-text-muted"> — </span>}
+                  <span className="text-text-secondary">{s.what}</span>
+                  {s.extra && <span className="block text-xs text-text-muted">{s.extra}</span>}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </BoxCard>
@@ -299,7 +340,7 @@ export function ChaseByTypeCard({ byName, onPick }: {
 export function TeamProgressCard({ teams }: { teams: CityAgg["teams"] }) {
   const rows = Object.entries(teams ?? {}).sort((a, b) => b[1].total - a[1].total);
   return (
-    <BoxCard title="Chase list by team" icon="group" right="settled of raised">
+    <BoxCard title="By team" icon="group" right="done / raised">
       {teams === undefined ? (
         <p className="text-sm text-text-muted">—</p>
       ) : rows.length === 0 ? (
