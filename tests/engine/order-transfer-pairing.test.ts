@@ -39,6 +39,13 @@ describe("a complete transfer — old customer in, new order out", () => {
     expect(forUnit(res, "APC7VY19031375")).toEqual([]);
   });
 
+  it("records both halves in the ledger as deliberately not raised", () => {
+    // Without this the re-check reads them as "gap cleared" and either leaves
+    // the old rows open (no gate book) or calls them resolved late (Delhi).
+    const ev = res.movement_events.filter((e) => e.barcode_display === "APC7VY19031375");
+    expect(ev.map((e) => `${e.direction}:${e.outcome}`).sort()).toEqual(["IN:SUPPRESSED", "OUT:SUPPRESSED"]);
+  });
+
   it("says so in the run notes", () => {
     expect(res.warnings.some((w) => w.includes("1 order transfer complete"))).toBe(true);
   });

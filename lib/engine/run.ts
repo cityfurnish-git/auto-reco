@@ -1266,6 +1266,47 @@ export function runReconciliation(
   collectEvents(inViews, "IN");
   collectEvents(outViews, "OUT");
 
+  // Both halves of a complete order transfer, as deliberate silence. They left
+  // the rows before any view was built, so without this the ledger has no
+  // trace of them — and the re-check's stale pass reads a unit with no trace
+  // as "the gap cleared": outside Delhi it leaves the old OT CASE and the old
+  // "Only Odoo has it" row open forever, in Delhi it rewrites them as resolved
+  // late. Seen on the first re-check after the rule shipped (23 Oct 2026).
+  // "other" rather than a new reason, so no hand-applied CHECK migration is
+  // needed; the transfer itself is in source_rows for anyone tracing it.
+  const ledgerKeys = new Set(movement_events.map((e) => `${e.direction}::${e.barcode}`));
+  const postedToday = (r: SourceRow) =>
+    typeof r.createdOn === "string" && r.createdOn.slice(0, 10) === runDate;
+  for (const r of [...transfers.paired, ...transfers.dropInLegs]) {
+    if (!postedToday(r)) continue;
+    const canonical = canonicalize(r.barcode);
+    const k = `${r.direction}::${canonical}`;
+    if (ledgerKeys.has(k)) continue;
+    ledgerKeys.add(k);
+    movement_events.push({
+      barcode: canonical,
+      barcode_display: r.barcode,
+      city,
+      direction: r.direction,
+      date: runDate,
+      present: { P: false, S: false, D: false, O: true },
+      reported,
+      odooSameDay: false,
+      odooNextDay: false,
+      odooCreatedToday: false,
+      isMovement: false,
+      jobType: r.jobType ?? null,
+      soNumber: r.soNumber ?? null,
+      ticketId: r.ticketId ?? null,
+      customer: r.customer ?? null,
+      product: r.product ?? null,
+      outcome: "SUPPRESSED",
+      varianceNames: [],
+      worstPriority: null,
+      suppressedReason: "other",
+    });
+  }
+
   return {
     city,
     date: runDate,

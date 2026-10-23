@@ -548,3 +548,37 @@ describe("resolveStaleOpenVariances", () => {
     expect(res.resolvedLate).toBe(0);
   });
 });
+
+describe("an old OT CASE the current rule no longer raises (23 Oct 2026)", () => {
+  const NO_GATE = { MUMBAI: { P: false, S: true, D: true, O: true } } as never;
+  const ot = { id: "ot", direction: "OUT", barcode: "ITEM-1", variance_name: VARIANCE.OT_CASE };
+
+  it("is deleted even without full coverage — a transfer accuses no book", async () => {
+    const s = stubDb([ot]);
+    const res = await resolveStaleOpenVariances(s.db, "run-2", "2026-08-01", [cityResult([], [])], NO_GATE);
+    expect(s.deleted).toEqual([["ot"]]);
+    expect(res.resolvedLate).toBe(0);
+  });
+
+  it("is never called resolved late on a fully covered run", async () => {
+    const s = stubDb([ot]);
+    await resolveStaleOpenVariances(s.db, "run-2", "2026-08-01", [cityResult([], [])], REPORTED);
+    expect(s.updated).toHaveLength(0);
+    expect(s.deleted).toEqual([["ot"]]);
+  });
+
+  it("is kept when Odoo did not report — an outage is not a decision", async () => {
+    const s = stubDb([ot]);
+    await resolveStaleOpenVariances(s.db, "run-2", "2026-08-01", [cityResult([], [])],
+      { MUMBAI: { P: true, S: true, D: true, O: false } } as never);
+    expect(s.deleted).toHaveLength(0);
+    expect(s.updated).toHaveLength(0);
+  });
+
+  it("is kept when this run raised it again", async () => {
+    const s = stubDb([ot]);
+    await resolveStaleOpenVariances(s.db, "run-2", "2026-08-01",
+      [cityResult([variance({ variance_name: VARIANCE.OT_CASE })], [])], NO_GATE);
+    expect(s.deleted).toHaveLength(0);
+  });
+});

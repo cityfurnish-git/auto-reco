@@ -736,6 +736,17 @@ export async function resolveStaleOpenVariances(
       const key = `${row.direction}::${row.barcode}::${row.variance_name}`;
       if (emittedKeys.has(key)) continue; // still current — upsert refreshed it
       const unit = `${row.direction}::${row.barcode}`;
+      // AN OT CASE IS A DECISION, NOT AN ABSENCE. It accuses no book, so no
+      // absence gate can ever retire it, and outside Delhi there is no full
+      // coverage either: an old one simply stayed open. Odoo is the whole
+      // evidence for it, so when Odoo reported and this run did not raise it,
+      // the current rule (lib/engine/order-transfer.ts, 23 Oct 2026) says it
+      // is either complete paperwork or a return now checked as a pickup.
+      // Without rep.O, a Metabase outage would wipe every open transfer.
+      if (row.variance_name === VARIANCE.OT_CASE) {
+        if (rep.O) supersededIds.push(row.id as string);
+        continue;
+      }
       if (emittedBarcodes.has(unit)) {
         supersededIds.push(row.id as string);
       } else if (suppressedUnits.has(unit)) {
