@@ -208,7 +208,10 @@ export const odooConnector: Connector = {
       // owner's Odoo screen read 84 where the tool read 81 and nothing said
       // why. The engine now raises each as an OT CASE for manual mapping and
       // leaves it out of every count.
-      const orderTransferRef = isOrderTransfer(r.reference_no)
+      // OUT only, since 23 Oct 2026: an IN on an OT order is the new customer
+      // handing the unit back — a real pickup (the floor saw 48 of 61), so it
+      // is a movement like any other. See lib/engine/order-transfer.ts.
+      const orderTransferRef = isOrderTransfer(r.reference_no) && direction === "OUT"
         ? String(r.reference_no).trim()
         : undefined;
       if (orderTransferRef) orderTransfers++;
@@ -399,7 +402,8 @@ export async function fetchOdooPostingsAfter(
     }
     // Same exclusion as the pull: an order transfer is paperwork, so it can
     // never be the "the entry was made after all" evidence this set stands for.
-    if (isOrderTransfer(r.reference_no)) {
+    // A return on an OT order is a real posting, and counts.
+    if (isOrderTransfer(r.reference_no) && direction === "OUT") {
       skipped++;
       continue;
     }

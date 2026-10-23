@@ -468,7 +468,7 @@ function SourceRowsModal({ cell, date, city, onClose }: {
                         is visible as the sheet wrote it. */}
                     <td className="px-3 py-1.5 border border-border whitespace-nowrap">
                       {r.orderTransferRef ? (
-                        <span className="badge badge-medium" title={`Order transfer ${r.orderTransferRef} — not a movement, not in the figure; raised as an OT CASE to map by hand`}>
+                        <span className="badge badge-medium" title={`Order transfer ${r.orderTransferRef} — not a movement, not in the figure; raised to map by hand only when the old customer's return is not beside it in Odoo`}>
                           OT CASE
                         </span>
                       ) : (r.status ?? "—")}

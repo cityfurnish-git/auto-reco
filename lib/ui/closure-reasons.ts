@@ -51,5 +51,5 @@ export const REASON_HINT: Partial<Record<ClosureReason, string>> = {
     "Logged afterwards against an earlier date — the stock itself was never missing.",
   "Wrong Entry Made by team": "Someone logged this against the wrong unit, ticket or direction.",
   "Order Transfer":
-    "Moved between orders inside Odoo — no truck, so the floor correctly has no record. New order transfers are filtered out automatically; this is for ones already raised.",
+    "Moved between orders inside Odoo — no truck, so the floor correctly has no record. Since 23 Oct 2026 a transfer is raised only when the old customer's return is missing from Odoo; this is for those, and for ones raised before.",
 };

@@ -42,7 +42,8 @@ for (const d of days) {
   const { rows } = await c.query(
     `SELECT source, direction, barcode, job_type AS "jobType", so_number AS "soNumber",
             ticket_id AS "ticketId", customer, product, status, city, date,
-            created_on AS "createdOn", movement_date AS "movementDate"
+            created_on AS "createdOn", movement_date AS "movementDate",
+            raw->>'orderTransferRef' AS "orderTransferRef"
        FROM source_rows WHERE run_id=$1`, [pick.run_id]);
   const byCity = new Map<string, SourceRow[]>();
   for (const r of rows) {

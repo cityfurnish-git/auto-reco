@@ -43,6 +43,11 @@ export interface SourceRow {
    * crosses the gate, so it can never be matched automatically. Kept rather
    * than dropped (owner's decision, 18 Sep 2026) and raised as an OT CASE for
    * the team to map by hand — never counted as a movement.
+   *
+   * OUT lines only since 23 Oct 2026 (an IN on an OT order is a return), and
+   * raised only when the old customer's IN is not beside it — see
+   * lib/engine/order-transfer.ts. Rows stored earlier may carry it on an IN;
+   * the engine reads it through isTransferOut(), which ignores those.
    */
   orderTransferRef?: string;
   /**

@@ -144,7 +144,7 @@ export const VARIANCE_META: Record<string, VarianceMeta> = {
     // only Odoo holds the two orders it links.
     bucket: "REAL",
     responsible: "odoo_team",
-    note: "Order transfer in Odoo (Reference# OT-…) — nothing moved through the gate. Map it to the unit and order it re-points, then close.",
+    note: "Order transfer in Odoo (Reference# OT-…) with no matching return from the old customer within a day — nothing moved through the gate. Find where the unit came from, map it, then close.",
   },
   [VARIANCE.ODOO_OUT_PENDING]: {
     // INFO, and it replaces a REAL "not in Odoo". Odoo DOES hold this dispatch —

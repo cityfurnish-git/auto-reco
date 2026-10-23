@@ -17,6 +17,7 @@ import { addDays, deriveRunDate, parseDate } from "./dates";
 import { detectDirectionConflicts } from "./direction-conflict";
 import { classify, duplicateHit } from "./ladder";
 import { filterOdooWindow } from "./odoo-window";
+import { isTransferOut, pairOrderTransfers } from "./order-transfer";
 import { utcToIstDate } from "../connectors/ist-window";
 import {
   isCityClosed,
@@ -160,10 +161,26 @@ export function runReconciliation(
   // as "Odoo only" and send someone hunting a unit that never moved; dropped
   // (as it was until 18 Sep 2026) it made Odoo's own screen read higher than
   // the tool with nothing saying why. Raised once, on the day it posted.
-  const otRows = rows.filter((r) => r.source === "ODOO" && !!r.orderTransferRef);
-  const odooRaw = rows.filter((r) => r.source === "ODOO" && !r.orderTransferRef);
-  const odooWindowed = filterOdooWindow(odooRaw, city, runDate, warnings);
+  //
+  // Since 23 Oct 2026 only an UNPAIRED transfer is raised: Odoo writes the old
+  // customer's IN beside the new order's OUT, and the two together are complete
+  // paperwork — both halves leave the check. An IN on an OT order is the new
+  // customer's return, a real pickup, and is reconciled like any other.
+  // See order-transfer.ts for the measurements.
   const nonOdoo = rows.filter((r) => r.source !== "ODOO");
+  const allOdoo = rows.filter((r) => r.source === "ODOO");
+  const transfers = pairOrderTransfers(allOdoo, nonOdoo);
+  const otRows = transfers.unpaired;
+  const odooRaw = allOdoo.filter((r) => !isTransferOut(r) && !transfers.dropInLegs.has(r));
+  const odooWindowed = filterOdooWindow(odooRaw, city, runDate, warnings);
+  const pairedToday = transfers.paired.filter(
+    (r) => typeof r.createdOn === "string" && r.createdOn.slice(0, 10) === runDate
+  ).length;
+  if (pairedToday > 0) {
+    warnings.push(
+      `${pairedToday} order transfer${pairedToday === 1 ? "" : "s"} complete in Odoo (old customer in, new order out) — paperwork, neither half raised`
+    );
+  }
 
   // DONE TASKS ONLY (owner's rule, 2026-08-01). The purpose of reconciliation
   // is checking that every COMPLETED movement is marked correctly everywhere.
