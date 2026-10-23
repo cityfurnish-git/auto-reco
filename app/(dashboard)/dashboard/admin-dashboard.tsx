@@ -8,7 +8,6 @@
 import SourceTruthCards from "./source-truth-cards";
 import { DashSection, DayStatus } from "./dashboard-sections";
 import { sourceLabel } from "@/lib/ui/source-names";
-import { variancePhrase } from "@/lib/ui/variance-phrases";
 import { VarianceName } from "@/components/variance-name";
 import { VarianceFlags } from "@/components/variance-flags";
 import InTransitSection from "./in-transit-section";
@@ -21,7 +20,6 @@ import type { SessionUser } from "@/lib/demo-auth";
 import { CITIES, type City } from "@/lib/sample-data";
 import type {
   Bucket,
-  Priority,
   VarianceDB,
   VarianceSource,
   VarianceStatus,
@@ -55,7 +53,6 @@ import { StaleRunBanner } from "./stale-run-banner";
 import { useSelection } from "@/lib/hooks/use-selection";
 import { useStickyState } from "@/lib/hooks/use-sticky-state";
 import BulkActionBar from "./bulk-action-bar";
-import { responsibleLabel } from "@/lib/ui/variance-format";
 import {
   useStats,
   useVariances,
@@ -69,7 +66,6 @@ import { shownBarcode } from "@/lib/ui/barcode-display";
 
 type CityTab = "ALL" | City;
 
-const SOURCES: VarianceSource[] = ["Odoo", "DT", "Sheet", "Physical", "Cross"];
 const PAGE_SIZE = 25;
 
 export default function AdminDashboard({ user }: { user: SessionUser }) {
@@ -79,11 +75,10 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
   const [cityTab, setCityTab] = useStickyState<CityTab>("admin.cityTab", "ALL");
   const [bucket, setBucket] = useState<Bucket | "ALL">("REAL");
   const [source, setSource] = useState<VarianceSource | "ALL">("ALL");
-  const [priority, setPriority] = useState<Priority | "ALL">("ALL");
+
   const [status, setStatus] = useState<VarianceStatus | "ALL" | "ACTIVE">("ACTIVE");
   const [varianceName, setVarianceName] = useState<string>("ALL");
-  const [responsible, setResponsible] = useState<string>("ALL");
-  const [opsType, setOpsType] = useState<string>("ALL");
+
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "desc" });
   const [searchInput, setSearchInput] = useState("");
   const [q, setQ] = useState("");
@@ -94,7 +89,6 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
   // whose badge counts across all dates; cleared the moment a date is picked.
   const [allDates, setAllDates] = useState(false);
   const [page, setPage] = useState(1);
-  const [moreFilters, setMoreFilters] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   // GROUP BY BARCODE. One unit's problems arrive as several rows — an inward,
   // an outward, sometimes a cross-check — and they are almost always closed by
@@ -149,11 +143,10 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
       // targeted barcode/ticket/SO lookup always surfaces the record.
       bucket: q ? "ALL" : bucket,
       source: q ? "ALL" : source,
-      priority: q ? "ALL" : priority,
+
       status: q ? "ALL" : status,
       variance: q ? "ALL" : varianceName,
-      responsible: q ? "ALL" : responsible,
-      jobType: q ? "ALL" : opsType,
+
       date: q || allDates ? undefined : dateF || undefined,
       // A search must find the barcode whatever night it landed on, and the
       // approvals queue must show every date the badge counted; everything else
@@ -165,16 +158,19 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
       page,
       pageSize: PAGE_SIZE,
     }),
-    [cityTab, bucket, source, priority, status, varianceName, responsible, opsType, dateF, allDates, q, sort, page]
+    [cityTab, bucket, source, status, varianceName, dateF, allDates, q, sort, page]
   );
   const { rows, total, totalPages, businessDate, sortDegraded, loading, error, refetch } =
     useVariances(filters);
 
-  // Options come from the data in scope, so the dropdowns only ever offer
-  // filters that will return something.
-  const { varianceNames, responsibles, opsTypes } = useVarianceFacets({
+  // Options describe THE ROWS IN VIEW, so an option that would return nothing
+  // is never offered. See useVarianceFacets for the measurement behind it.
+  const { varianceNames, sources } = useVarianceFacets({
     city: cityTab,
     date: dateF || undefined,
+    bucket,
+    status,
+    source,
   });
 
   // Selection deliberately survives paging — picking 20 on page 1 and 15 on
@@ -258,11 +254,8 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
     cityTab !== "ALL" ||
     bucket !== "REAL" ||
     source !== "ALL" ||
-    priority !== "ALL" ||
     status !== "ACTIVE" ||
     varianceName !== "ALL" ||
-    responsible !== "ALL" ||
-    opsType !== "ALL" ||
     !!dateF ||
     !!q;
 
@@ -270,11 +263,8 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
     setCityTab("ALL");
     setBucket("REAL");
     setSource("ALL");
-    setPriority("ALL");
     setStatus("ACTIVE");
     setVarianceName("ALL");
-    setResponsible("ALL");
-    setOpsType("ALL");
     setDateF("");
     setSearchInput("");
     setPage(1);
@@ -675,48 +665,50 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
             {/* "Needs action" spans open + in_progress. Flagging moves a row
                 to in_progress, and a plain "open" filter hid exactly the rows
                 the flag was meant to escalate. */}
+            {/* Three, not six: in 36,647 rows ever recorded only `open` and
+                `closed` have really existed. "Pending approval" never matched
+                once; "Flagged" matched three times, last on 3 August. */}
             <option value="ACTIVE">Still needs someone</option>
-            <option value="open">Open only</option>
-            <option value="in_progress">Flagged / in progress</option>
-            <option value="pending_approval">Pending approval</option>
             <option value="closed">Closed</option>
             <option value="ALL">Any status</option>
           </select>
+          {/* WHICH BOOK IS SHORT, which is who you go and ask. Replaced the
+              team-name filter on 22 Oct 2026 at the owner's request. A movement
+              two books missed is listed under both. */}
           <select
-            value={responsible}
-            onChange={(e) => resetPage(setResponsible)(e.target.value)}
+            value={source}
+            onChange={(e) => resetPage(setSource)(e.target.value as never)}
             className="input-clean cursor-pointer"
-            title="Filter to the team that owns these"
+            title="Which book has no entry for this movement"
           >
-            <option value="ALL">All teams</option>
-            {responsibles.map((f) => (
+            <option value="ALL">Any source</option>
+            {sources.map((f) => (
               <option key={f.value} value={f.value}>
-                {responsibleLabel(f.value)} ({f.real})
+                {f.value} ({f.count})
               </option>
             ))}
           </select>
-          {/* Problem — by its structured phrase, not the engine's long name,
-              which ran off the control ("OT CASE — Order Transfer i…"). */}
+          {/* Problem type. The name itself is now plain English, so it is shown
+              as it is rather than translated through a phrase — and the count
+              is the rows IN VIEW, so no option can come back empty. */}
           <select
             value={varianceName}
             onChange={(e) => resetPage(setVarianceName)(e.target.value)}
-            className="input-clean cursor-pointer max-w-[260px]"
-            title="Filter to one kind of problem"
+            className="input-clean cursor-pointer max-w-[300px]"
+            title="Work one kind of problem at a time"
           >
             <option value="ALL">All problems</option>
             {varianceNames.map((f) => (
               <option key={f.value} value={f.value}>
-                {variancePhrase(f.value) ?? f.value} ({f.real})
+                {f.value} ({f.count})
               </option>
             ))}
           </select>
-          <button
-            onClick={() => setMoreFilters((v) => !v)}
-            className={`btn btn-compact ${moreFilters || bucket !== "REAL" || source !== "ALL" || priority !== "ALL" || opsType !== "ALL" ? "btn-secondary text-accent" : "btn-ghost"}`}
-            title="Needs action, raised by, priority, job type"
-          >
-            <Icon name="filter" size={16} /> More filters
-          </button>
+          <select value={bucket} onChange={(e) => resetPage(setBucket)(e.target.value as Bucket | "ALL")} className="input-clean font-semibold cursor-pointer" title="Chase items, or notes for the record">
+            <option value="REAL">Needs chasing</option>
+            <option value="INFO">Needs nothing</option>
+            <option value="ALL">All items</option>
+          </select>
           <label className="flex items-center gap-2 text-sm ml-auto cursor-pointer select-none" title="Sort by barcode and keep one unit's rows together, so they can be resolved in one go">
             <input type="checkbox" checked={groupBarcode} onChange={(e) => {
               setGroupBarcode(e.target.checked);
@@ -738,41 +730,6 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
             {exporting ? "Exporting…" : `Export ${total || ""}`.trim()}
           </button>
         </div>
-        {moreFilters && (
-          <div className="px-3 py-2 border-b border-border flex flex-wrap items-center gap-2">
-            <select value={bucket} onChange={(e) => resetPage(setBucket)(e.target.value as Bucket | "ALL")} className="input-clean cursor-pointer" title="Action needed">
-              <option value="REAL">Needs action</option>
-              <option value="INFO">No action needed</option>
-              <option value="ALL">Both</option>
-            </select>
-            <select value={source} onChange={(e) => resetPage(setSource)(e.target.value as VarianceSource | "ALL")} className="input-clean cursor-pointer" title="Raised by">
-              <option value="ALL">Raised by any book</option>
-              {SOURCES.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
-            </select>
-            <select value={priority} onChange={(e) => resetPage(setPriority)(e.target.value as Priority | "ALL")} className="input-clean cursor-pointer" title="Priority">
-              <option value="ALL">Any priority</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Info">Info</option>
-            </select>
-            {/* Ops type. The "(none)" bucket is explicit because job_type is
-                null on a large share of rows. */}
-            <select
-              value={opsType}
-              onChange={(e) => resetPage(setOpsType)(e.target.value)}
-              className="input-clean cursor-pointer max-w-[220px]"
-              title="Job type"
-            >
-              <option value="ALL">All job types</option>
-              {opsTypes.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {opsTypeLabel(f.value)} ({f.real})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
         {/* Mobile: card list (below md). The whole card opens the detail dialog,
             same as a desktop row — managers work from a phone, and without this
             the evidence panel was unreachable for them. Inner buttons stop
@@ -954,7 +911,20 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
                       : ""
                   }`}
                 >
-                  <td onClick={(e) => e.stopPropagation()} className="col-pin col-pin-1">
+                  {/* Severity at a glance: red is three books short, amber one
+                      or two, grey a note for the record. Same stripe as the
+                      manager board — it is what lets the chase-or-note question
+                      be answered by looking instead of by filtering. */}
+                  <td
+                    onClick={(e) => e.stopPropagation()}
+                    className={`col-pin col-pin-1 border-l-[3px] ${
+                      v.bucket !== "REAL"
+                        ? "border-l-border"
+                        : v.priority === "High"
+                          ? "border-l-danger"
+                          : "border-l-status-warning"
+                    }`}
+                  >
                     <RowCheckbox
                       checked={sel.has(v.id)}
                       onChange={(shift) => onRowCheck(v.id, shift)}
