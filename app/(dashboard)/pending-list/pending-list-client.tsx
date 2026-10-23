@@ -336,8 +336,11 @@ export default function PendingListClient({ user }: { user: SessionUser }) {
         </div>
 
         {/* Desktop table */}
+        {/* min-width, so a narrow window scrolls the table instead of
+            squeezing a column to one word per line — the Note column was
+            reading "Odo / o out / pen / ding" on a laptop (23 Oct 2026). */}
         <div className="overflow-x-auto hidden md:block">
-          <table className="table-clean">
+          <table className="table-clean min-w-[1180px]">
             <thead>
               <tr>
                 <th className="w-10">
@@ -365,7 +368,9 @@ export default function PendingListClient({ user }: { user: SessionUser }) {
                   onSort={applySort}
                   title="Sort by how long this has been on the list"
                 />
-                <th className="text-right">Action</th>
+                {/* Pinned: with the table scrolling sideways, the one button a
+                    row exists for must never scroll off screen. */}
+                <th className="text-right sticky right-0 bg-accent-soft">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -384,7 +389,7 @@ export default function PendingListClient({ user }: { user: SessionUser }) {
                     />
                   </td>
                   <td className="whitespace-nowrap text-text-secondary">{v.business_date}</td>
-                  {isAdmin && <td>{v.city}</td>}
+                  {isAdmin && <td className="whitespace-nowrap">{v.city}</td>}
                   <td className="max-w-[200px] truncate" title={v.product ?? ""}>
                     {v.product ?? "—"}
                   </td>
@@ -394,21 +399,21 @@ export default function PendingListClient({ user }: { user: SessionUser }) {
                         e.stopPropagation();
                         openDetail(v);
                       }}
-                      className="font-mono font-semibold text-text-primary hover:text-accent hover:underline"
+                      className="font-mono font-semibold text-text-primary hover:text-accent hover:underline whitespace-nowrap"
                     >
                       {shownBarcode(v)}
                     </button>
                   </td>
                   <td className="text-text-secondary text-xs">{opsTypeLabel(v.job_type)}</td>
-                  <td className="max-w-[220px]" title={v.note ?? ""}>
+                  <td className="min-w-[180px] max-w-[240px]" title={v.note ?? ""}>
                     <VarianceName name={v.variance_name} ctx={{ direction: v.direction, jobType: v.job_type, bucket: v.bucket, note: v.note }} />
                     <VarianceFlags flags={v.flags} />
                   </td>
                   <td className="text-text-secondary whitespace-nowrap">
                     {responsibleLabel(v.responsible)}
                   </td>
-                  <td className="max-w-[200px] text-text-muted text-xs">
-                    {v.closure_note || "—"}
+                  <td className="min-w-[200px] max-w-[260px] text-text-muted text-xs" title={v.closure_note ?? ""}>
+                    <span className="line-clamp-3">{v.closure_note || "—"}</span>
                   </td>
                   <td
                     className="text-text-secondary whitespace-nowrap"
@@ -416,7 +421,7 @@ export default function PendingListClient({ user }: { user: SessionUser }) {
                   >
                     {ageLabel(v.closed_at)}
                   </td>
-                  <td className="text-right">
+                  <td className={`text-right sticky right-0 shadow-[-8px_0_12px_-10px_rgba(30,20,80,0.25)] ${sel.has(v.id) ? "bg-accent-soft" : "bg-surface-card"}`}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
