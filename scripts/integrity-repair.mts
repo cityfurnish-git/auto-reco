@@ -104,6 +104,11 @@ for (const d of [...dates].sort()) {
           break;
         }
         case "grading": {
+          // A row another rule is clearing or closing is no longer graded as a
+          // chase item. The first --apply ran grading after resolved-late on 4
+          // rows (14 Sep) and put them back to REAL; the check caught it.
+          if (f.rule === "grading" && patches.get(id)?.patch.note === RESOLVED_LATE_NOTE) break;
+          if (patches.get(id)?.patch.status === "closed") break;
           const want = chasePriority(r.variance_name,
             { P: !!r.reported_p, S: !!r.reported_s, D: !!r.reported_d, O: !!r.reported_o }, r.priority as "High");
           merge(id, { bucket: want.bucket, priority: want.priority }, `graded ${want.priority} by books that reported`);

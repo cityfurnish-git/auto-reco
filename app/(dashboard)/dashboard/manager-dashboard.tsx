@@ -506,7 +506,7 @@ export default function ManagerDashboard({ user }: { user: SessionUser }) {
                 What is left answers a question somebody actually asks: what
                 kind of problem, which book is short, is it still open. */}
             <select value={bucket} onChange={(e) => resetPage(setBucket)(e.target.value as Bucket | "ALL")} className="input-clean font-semibold cursor-pointer" title="Chase items, or notes for the record">
-              <option value="REAL">Needs chasing</option>
+              <option value="REAL">Variances to fix</option>
               <option value="INFO">Needs nothing</option>
               <option value="ALL">All items</option>
             </select>

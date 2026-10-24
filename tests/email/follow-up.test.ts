@@ -213,7 +213,7 @@ describe("the follow-up email", () => {
   it("states the progress plainly when everything closed", () => {
     const text = renderFollowUpText(CASES.allClosed);
     expect(text).toContain("All 3 are now closed");
-    expect(text).toContain("is left to chase");
+    expect(text).toContain("is left to fix");
   });
 
   it("keeps items raised since the email out of the headline", () => {

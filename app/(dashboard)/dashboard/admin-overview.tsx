@@ -52,8 +52,7 @@ export function OverviewHero({ name, agg, businessDate, loading, error, onOpenCh
             <span className="text-text-secondary">Here is {businessDate ? dayName(businessDate) : "the latest day"}.</span>
           </h1>
           <p className="text-sm text-text-muted mt-3 max-w-md">
-            {fig(agg?.movements)} units moved · <b className="text-text-primary">{fig(agg?.openReal)}</b> still to
-            chase {scope === "admin" ? "across all five cities" : `in ${titleCase(scope.city)}`}.
+            {fig(agg?.movements)} units moved · <b className="text-text-primary">{fig(agg?.openReal)}</b> variances to fix {scope === "admin" ? "across all five cities" : `in ${titleCase(scope.city)}`}.
           </p>
         </div>
         {dates}
@@ -62,7 +61,7 @@ export function OverviewHero({ name, agg, businessDate, loading, error, onOpenCh
         <WayIn
           onClick={onOpenChase}
           icon="pending_actions"
-          title="Chase list"
+          title="Variances to Fix"
           figure={fig(agg?.openReal)}
           caption="Units the books disagree about, still open"
         />
@@ -242,7 +241,7 @@ export function CityRings({ cities, businessDate, calendar, trend, onOpen }: {
             />
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wider text-text-muted">
-                {off ? (holiday ? "Holiday" : "Weekly off") : `${c.openReal} to chase`}
+                {off ? (holiday ? "Holiday" : "Weekly off") : `${c.openReal} to fix`}
               </div>
               <div className="font-headline text-base text-text-primary">{titleCase(c.city)}</div>
               <div className="text-xs text-text-muted truncate">

@@ -625,7 +625,7 @@ export default function AdminDashboard({ user }: { user: SessionUser }) {
             ))}
           </select>
           <select value={bucket} onChange={(e) => resetPage(setBucket)(e.target.value as Bucket | "ALL")} className="input-clean font-semibold cursor-pointer" title="Chase items, or notes for the record">
-            <option value="REAL">Needs chasing</option>
+            <option value="REAL">Variances to fix</option>
             <option value="INFO">Needs nothing</option>
             <option value="ALL">All items</option>
           </select>

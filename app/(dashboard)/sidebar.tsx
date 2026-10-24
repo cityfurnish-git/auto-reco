@@ -121,7 +121,7 @@ export default function Sidebar({
         const c = json.combined ?? {};
         setRunToast({
           ok: true,
-          text: `Run ${json.runDate} · ${json.status} — ${c.real_count ?? 0} losses to chase, ${json.variancesUpserted ?? 0} variances stored (${c.info_count ?? 0} posting-lag hidden).`,
+          text: `Run ${json.runDate} · ${json.status} — ${c.real_count ?? 0} variances to fix, ${json.variancesUpserted ?? 0} variances stored (${c.info_count ?? 0} posting-lag hidden).`,
         });
         // Nudge any open dashboard to reload its data in place.
         window.dispatchEvent(new CustomEvent("reconcile:complete"));
@@ -148,7 +148,7 @@ export default function Sidebar({
       setRunning(false);
       setRunToast({
         ok: true,
-        text: `Run complete — ${run.combined.real_count} losses to chase across ${run.perCity.length} cities (${run.combined.info_count} posting-lag hidden).`,
+        text: `Run complete — ${run.combined.real_count} variances to fix across ${run.perCity.length} cities (${run.combined.info_count} posting-lag hidden).`,
       });
       setTimeout(() => setRunToast(null), 6000);
     }, 800);

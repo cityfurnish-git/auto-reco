@@ -221,7 +221,7 @@ function StoryView({ data }: { data: History }) {
             {story.moves.length} movement{story.moves.length === 1 ? "" : "s"}
           </span>
           <span className={story.openCount ? "text-danger font-semibold" : "text-success"}>
-            {story.openCount ? `${story.openCount} open to chase` : "Nothing open"}
+            {story.openCount ? `${story.openCount} to fix` : "Nothing open"}
           </span>
           {story.gaps.length > 0 && (
             <span className="text-danger font-semibold">

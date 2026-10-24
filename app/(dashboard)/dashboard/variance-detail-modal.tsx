@@ -330,7 +330,7 @@ export default function VarianceDetailModal({
             <p className="mt-3 text-xs text-text-secondary bg-surface-elevated border border-border rounded-control p-3">
               <b>Auto-downgraded.</b> The rule ladder first rated this{" "}
               <b>{v.original_priority ?? "higher"}</b>, but this pattern is a data-hygiene gap
-              rather than a stock loss, so it was relabelled INFO and kept out of the chase list.
+              rather than a stock loss, so it was relabelled INFO and kept off Variances to Fix.
             </p>
           )}
         </section>

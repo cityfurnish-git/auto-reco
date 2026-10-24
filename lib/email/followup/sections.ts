@@ -196,7 +196,7 @@ export function buildFollowUpSections(
     kind: "para",
     text:
       c.stillOpen === 0
-        ? `Nothing from ${dateLabel} is left to chase.`
+        ? `Nothing from ${dateLabel} is left to fix.`
         : `Anything still open has been outstanding since ${dateLabel} — close it on the dashboard, or record why it cannot be closed.`,
     tone: c.stillOpen === 0 ? "good" : "normal",
   });
